@@ -43,6 +43,11 @@ function render() {
           <span class="url">${status.open ? escapeHtml(status.url ?? '') : 'not open'}</span>
         </div>
         <div class="instance-actions">
+          ${
+            status.recordingEnabled
+              ? `<span class="take-badge"><span class="rec-dot"></span>${status.takeNumber ? `take ${status.takeNumber}` : 'not recording yet'}</span>`
+              : ''
+          }
           <button class="pill-btn" data-action="open" data-instance="${instanceId}">
             ${status.open ? 'Focus window' : 'Open browser (maximized)'}
           </button>
@@ -52,6 +57,11 @@ function render() {
           ${
             status.waitingLabel
               ? `<button class="pill-btn continue" data-action="continue" data-instance="${instanceId}">Continue →</button>`
+              : ''
+          }
+          ${
+            status.recordingEnabled && status.open
+              ? `<button class="pill-btn record" data-action="new-take" data-instance="${instanceId}">New Take</button>`
               : ''
           }
           <button class="pill-btn danger" data-action="reset" data-instance="${instanceId}">Reset</button>
@@ -102,6 +112,9 @@ function render() {
   })
   appEl.querySelectorAll('[data-action="reset"]').forEach(btn => {
     btn.addEventListener('click', () => resetInstance(btn.dataset.instance))
+  })
+  appEl.querySelectorAll('[data-action="new-take"]').forEach(btn => {
+    btn.addEventListener('click', () => newTake(btn.dataset.instance))
   })
 }
 
@@ -160,6 +173,57 @@ async function resetInstance(id) {
   refreshInstances()
 }
 
+async function newTake(id) {
+  const label = prompt('Label for this take (optional, e.g. "Segment 2 — Doctor"):', '')
+  if (label === null) return // cancelled
+  const res = await fetch(`/api/instances/${id}/new-take`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label })
+  })
+  const json = await res.json()
+  if (!json.ok) alert(json.error)
+  await refreshInstances()
+  await refreshRecordings()
+}
+
+function renderRecordings(takes) {
+  const listEl = document.getElementById('recordings-list')
+  const sectionEl = document.getElementById('recordings-section')
+  if (!takes) {
+    sectionEl.style.display = 'none'
+    return
+  }
+  sectionEl.style.display = ''
+  if (takes.length === 0) {
+    listEl.innerHTML = '<p style="color:#8b92a3;font-size:13px;">No takes recorded yet this session.</p>'
+    return
+  }
+  listEl.innerHTML = takes
+    .map(t => {
+      const color = INSTANCE_COLORS[t.instance] ?? '#888'
+      const name = t.label ? escapeHtml(t.label) : `Take ${t.take_number}`
+      const link = t.file_path
+        ? `<a href="/recordings/${t.file_path}" target="_blank">${escapeHtml(t.file_path.split('/').pop())}</a>`
+        : `<span class="pending">recording…</span>`
+      return `<div class="take-row">
+        <span><strong style="color:${color}">${escapeHtml(t.instance)}</strong> · ${name}</span>
+        ${link}
+      </div>`
+    })
+    .join('')
+}
+
+async function refreshRecordings() {
+  try {
+    const res = await fetch('/api/recordings')
+    const json = await res.json()
+    renderRecordings(json.enabled ? json.takes : null)
+  } catch {
+    // panel server not reachable
+  }
+}
+
 async function refreshInstances() {
   try {
     const res = await fetch('/api/instances')
@@ -212,7 +276,9 @@ async function init() {
   steps = await res.json()
   await loadBaseUrl()
   await refreshInstances()
+  await refreshRecordings()
   setInterval(refreshInstances, 1500) // fast enough to catch a waitingLabel promptly during step-through
+  setInterval(refreshRecordings, 4000)
 }
 
 init()

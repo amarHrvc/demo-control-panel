@@ -520,14 +520,6 @@
     <div class="divider"><span class="label">08 · Not built yet</span><span class="rule"></span></div>
     <ul>
       <li>
-        <strong>Video recording.</strong> Playwright's
-        <code>recordVideo</code> would fit a "shoot small takes, redo just the
-        broken one" workflow — each page becomes a take, and a future
-        <em>New Take</em> action would close the page (finalizing its
-        <code>.webm</code>) and open a fresh one in the same context, so
-        cookies and login survive between takes.
-      </li>
-      <li>
         <strong>Secondary-monitor auto-positioning.</strong> Deliberately
         skipped — instances launch maximized wherever Windows opens them, and
         get dragged to the second monitor by hand.
@@ -543,6 +535,20 @@
       one-time snapshot.
     </p>
     <div class="changelog">
+      <div class="entry">
+        <div class="entry-head">
+          <span class="date">2026-07-03</span>
+          <span class="title">Manual-take video recording for a local fallback clip library</span>
+        </div>
+        <dl>
+          <dt>What</dt>
+          <dd>New <code>recordings.ts</code>: when started with <code>RECORD=1</code>, each instance's browser context records video via Playwright's built-in <code>recordVideo</code>. A <strong>New Take</strong> button (panel header, recording-only) closes the current page — finalizing its <code>.webm</code> — and opens a fresh page in the <em>same context</em>, so login/cookies carry over into the next take with no re-login. Take metadata (instance, take number, optional label, file path, timestamps) is written to a SQLite table (<code>recordings.db</code>, via Node's built-in <code>node:sqlite</code> — no new dependency) and listed in a new Recordings section at the bottom of the panel, each with a link served from <code>/recordings</code>.</dd>
+          <dt>Why</dt>
+          <dd>Following <a href="#changelog-base-url">runtime base-URL switching</a>, the presenter wanted a fallback if the hosted (Railway) environment is flaky live on stage: rehearse the whole demo locally ahead of time with recording on, and if a live segment fails, play back the matching local clip instead of improvising. Splitting per individual step wasn't viable — most steps assume the page is wherever the previous step in that instance left it, and video capture is tied to page lifecycle (finalizes only on close) — so takes are a presenter-chosen boundary (e.g. one per segment) instead of automatic per-step recording.</dd>
+          <dt>How</dt>
+          <dd>Video bytes stay as files under <code>recordings/&lt;session timestamp&gt;/</code>; SQLite stores only metadata, with <code>file_path</code> saved relative to the recordings root so it doubles directly as a URL path once that root is served statically. <code>video.path()</code> only resolves after the owning context/page has actually closed, so <code>closeInstance()</code> in <code>server.ts</code> closes the browser <em>first</em>, then awaits the path — used by reset, base-URL switching, and a new <code>SIGINT</code>/<code>SIGTERM</code> handler (otherwise Ctrl+C mid-recording would kill Chromium before its video finished muxing, leaving a corrupt file). Both <code>recordings/</code> and <code>recordings.db</code> are gitignored. Off by default — <code>npm run panel</code> without <code>RECORD=1</code> is unchanged.</dd>
+        </dl>
+      </div>
       <div class="entry" id="changelog-base-url">
         <div class="entry-head">
           <span class="date">2026-07-03</span>

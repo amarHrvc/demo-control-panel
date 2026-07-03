@@ -49,6 +49,29 @@ DRY_RUN=1 npm run panel
 Run without `DRY_RUN` only when you actually want those effects (the real
 defense, or a deliberate re-seed-and-redo).
 
+## Recording a local fallback
+
+If you want a backup clip library in case the live environment (e.g. the
+Railway deploy) misbehaves mid-presentation, rehearse locally with
+recording on:
+
+```bash
+RECORD=1 npm run panel
+```
+
+Each instance records continuously from the moment it opens. Click **New
+Take** in an instance's header to close out the current clip and start a
+fresh one in the same login session (cookies carry over — no re-login
+needed) — do this at natural breakpoints, e.g. per segment, so you end up
+with short clips you can swap in for just the part that failed live rather
+than one long recording. You'll be prompted for an optional label.
+
+Finished takes show up in the **Recordings** section at the bottom of the
+panel with a link to the `.webm`. Files land under `recordings/<session
+timestamp>/` and metadata (instance, take number, label, timestamps) is
+tracked in `recordings.db` (SQLite) — both are gitignored. Recording is off
+by default; `npm run panel` without `RECORD=1` behaves exactly as before.
+
 ## Architecture
 
 - **`steps.ts`** — single source of truth. Each step declares which role
@@ -112,14 +135,6 @@ apart by sight without needing focus-stealing to work at all.
 
 ## Deferred / not yet built
 
-- **Video recording.** Playwright supports this natively
-  (`context({ recordVideo: { dir, size } })`, one `.webm` finalized per page
-  on close) and fits the "shoot small clips, redo just the broken one" idea
-  well: each instance's page becomes a "take," and a `New Take` action would
-  close the current page (finalizing its video) and open a fresh one in the
-  same context — cookies/login persist at the context level, so no
-  re-login needed between takes. Not implemented yet; revisit when ready to
-  actually record.
 - **Secondary-monitor auto-positioning.** Deliberately skipped — instances
   launch maximized on whatever monitor Windows opens them on, and you drag
   them to the second monitor by hand. No monitor-geometry detection/config
