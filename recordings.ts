@@ -21,6 +21,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 import { mkdirSync } from 'node:fs'
+import { unlink } from 'node:fs/promises'
 import path from 'node:path'
 import type { Video } from 'playwright'
 import type { InstanceId } from './steps.ts'
@@ -109,4 +110,22 @@ export async function finalizeTake(id: number, video: Video | null): Promise<voi
 export function listTakes(): TakeRow[] {
   if (!db) return []
   return db.prepare('SELECT * FROM takes ORDER BY instance, take_number').all() as unknown as TakeRow[]
+}
+
+/**
+ * Deletes one take's row and its video file (if it has one), e.g. to clear
+ * out a stale "recording…" entry left behind by a take whose take/browser
+ * never finalized cleanly (crash, killed process). Returns false if no take
+ * with that id exists — the take table survives across process restarts,
+ * but the DB itself is never created until recording has been enabled once.
+ */
+export async function deleteTake(id: number): Promise<boolean> {
+  if (!db) return false
+  const row = db.prepare('SELECT * FROM takes WHERE id = ?').get(id) as unknown as TakeRow | undefined
+  if (!row) return false
+  db.prepare('DELETE FROM takes WHERE id = ?').run(id)
+  if (row.file_path) {
+    await unlink(path.join(RECORDINGS_ROOT, row.file_path)).catch(() => {})
+  }
+  return true
 }

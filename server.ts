@@ -30,6 +30,7 @@ import {
   startTake,
   finalizeTake,
   listTakes,
+  deleteTake,
   type OpenTake
 } from './recordings.ts'
 
@@ -237,6 +238,25 @@ app.post('/api/instances/:id/new-take', async (req, res) => {
 
 app.get('/api/recordings', (_req, res) => {
   res.json({ enabled: isRecordingEnabled(), takes: listTakes() })
+})
+
+app.delete('/api/recordings/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ ok: false, error: 'Invalid take id' })
+    return
+  }
+  const active = [...instances.values()].some(inst => inst.recording?.id === id)
+  if (active) {
+    res.status(400).json({ ok: false, error: 'This take is still recording — stop it (Reset or New Take) before deleting' })
+    return
+  }
+  const deleted = await deleteTake(id)
+  if (!deleted) {
+    res.status(404).json({ ok: false, error: 'No take with that id' })
+    return
+  }
+  res.json({ ok: true })
 })
 
 app.post('/api/recording', (req, res) => {

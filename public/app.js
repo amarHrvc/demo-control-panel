@@ -225,10 +225,27 @@ function renderRecordings(enabled, takes) {
         : `<span class="pending">recording…</span>`
       return `<div class="take-row">
         <span><strong style="color:${color}">${escapeHtml(t.instance)}</strong> · ${name}</span>
-        ${link}
+        <span style="display:flex;align-items:center;gap:10px;">
+          ${link}
+          <button class="pill-btn danger" data-action="delete-take" data-id="${t.id}">Delete</button>
+        </span>
       </div>`
     })
     .join('')
+  listEl.querySelectorAll('[data-action="delete-take"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteTakeRow(btn.dataset.id))
+  })
+}
+
+async function deleteTakeRow(id) {
+  if (!confirm('Delete this take? This removes its database entry and video file permanently.')) return
+  const res = await fetch(`/api/recordings/${id}`, { method: 'DELETE' })
+  const json = await res.json()
+  if (!json.ok) {
+    alert(json.error)
+    return
+  }
+  await refreshRecordings()
 }
 
 async function refreshRecordings() {
