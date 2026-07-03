@@ -84,8 +84,13 @@ export interface StepContext {
   page: Page
   /** Read-only snapshot of this instance's state at the moment the step started. */
   state: Readonly<DemoState>
-  /** Await this between sub-actions — blocks while the instance is paused. */
-  checkpoint: () => Promise<void>
+  /**
+   * Runs one atomic, narratable action. In the web panel, when step-through is
+   * armed on this instance, execution blocks after the action completes until
+   * the presenter clicks Continue — and re-arms for the next act() call, so
+   * staying armed stops you at every action in sequence, not just the first.
+   */
+  act: <T>(label: string, fn: () => Promise<T>) => Promise<T>
 }
 
 export interface StepDef {
@@ -127,7 +132,7 @@ export function buildSteps(): StepDef[] {
       segment: 'SEGMENT 1 · Admin',
       title: 'Step 1 — Login as Admin',
       say: 'Each role sees a different entry point on login. The admin lands on a system overview dashboard showing total registered users and patients.',
-      run: async ({ page }) => login(page, CREDS.admin.email, CREDS.admin.password)
+      run: async ({ page, act }) => act('Log in as Admin', () => login(page, CREDS.admin.email, CREDS.admin.password))
     },
     {
       id: 'admin-dashboard',
@@ -145,29 +150,32 @@ export function buildSteps(): StepDef[] {
       title: 'Step 3 — User Management',
       say: 'Only admins can create accounts and assign roles. If I assign a wrong role or a duplicate email, the form returns inline validation errors.',
       requires: 'Logged in as Admin (Step 1).',
-      run: async ({ page, checkpoint }) => {
-        await page.getByRole('link', { name: /Manage Users/ }).click()
-        await page.waitForURL('**/dashboard/users')
+      run: async ({ page, act }) => {
+        await act('Open Manage Users', async () => {
+          await page.getByRole('link', { name: /Manage Users/ }).click()
+          await page.waitForURL('**/dashboard/users')
+        })
 
         const search = page.getByPlaceholder('Search by name or email')
-        await search.fill('amina')
-        await page.waitForTimeout(600)
-        await search.fill('')
-        await checkpoint()
+        await act('Search for "amina"', () => search.fill('amina'))
+        await act('Clear search', async () => {
+          await page.waitForTimeout(600)
+          await search.fill('')
+        })
 
-        await page.getByRole('button', { name: 'Add New User' }).click()
+        await act('Open Add New User dialog', () => page.getByRole('button', { name: 'Add New User' }).click())
         const dialog = page.getByRole('dialog')
-        await dialog.getByLabel('Name').fill('Dr. Haris Mujanović')
-        await dialog.getByLabel('Email').fill('haris.mujanovic@nutribase.test')
-        await checkpoint()
+        await act('Fill Name', () => dialog.getByLabel('Name').fill('Dr. Haris Mujanović'))
+        await act('Fill Email', () => dialog.getByLabel('Email').fill('haris.mujanovic@nutribase.test'))
 
-        await dialog.getByLabel('Role').click()
-        await page.getByRole('listbox').waitFor({ state: 'visible' })
-        await page.getByRole('option', { name: 'Doktor', exact: true }).click()
-        await dialog.getByLabel('Password', { exact: true }).fill('password')
-        await checkpoint()
+        await act('Open Role dropdown', async () => {
+          await dialog.getByLabel('Role').click()
+          await page.getByRole('listbox').waitFor({ state: 'visible' })
+        })
+        await act('Select Doktor role', () => page.getByRole('option', { name: 'Doktor', exact: true }).click())
+        await act('Fill password', () => dialog.getByLabel('Password', { exact: true }).fill('password'))
 
-        await dialog.getByRole('button', { name: 'Cancel' }).click()
+        await act('Cancel dialog', () => dialog.getByRole('button', { name: 'Cancel' }).click())
       }
     },
 
@@ -178,7 +186,7 @@ export function buildSteps(): StepDef[] {
       segment: 'SEGMENT 2 · Doctor',
       title: 'Step 4 — Login as Doctor',
       say: 'Doctors land on a different dashboard — they see their own visit schedule, not a system-wide user count.',
-      run: async ({ page }) => login(page, CREDS.doctor.email, CREDS.doctor.password)
+      run: async ({ page, act }) => act('Log in as Doctor', () => login(page, CREDS.doctor.email, CREDS.doctor.password))
     },
     {
       id: 'patient-list',
@@ -186,11 +194,13 @@ export function buildSteps(): StepDef[] {
       segment: 'SEGMENT 2 · Doctor',
       title: 'Step 5 — Patient List → Fatima Hadžić',
       requires: 'Logged in as Doctor (Step 4).',
-      run: async ({ page }) => {
-        await page.goto(`${BASE_URL}/dashboard/patients`)
-        await page.getByPlaceholder('Search by name, phone or other').fill('fat')
-        await page.getByRole('row', { name: /Fatima/ }).click()
-        await page.waitForURL('**/dashboard/patients/**')
+      run: async ({ page, act }) => {
+        await act('Open patient list', () => page.goto(`${BASE_URL}/dashboard/patients`))
+        await act('Search for "fat"', () => page.getByPlaceholder('Search by name, phone or other').fill('fat'))
+        await act('Open Fatima’s profile', async () => {
+          await page.getByRole('row', { name: /Fatima/ }).click()
+          await page.waitForURL('**/dashboard/patients/**')
+        })
         return { fatimaUrl: page.url() }
       }
     },
@@ -201,11 +211,12 @@ export function buildSteps(): StepDef[] {
       title: 'Step 6 — Fatima Hadžić — Full Profile',
       say: "Fatima is a 53-year-old teacher from Mostar, referred for Type 2 diabetes management and weight loss. Social determinants matter in nutrition — knowing she has insurance, stable food access, and family support directly shapes the dietary plan we'd recommend.",
       requires: "Run 'Patient List → Fatima Hadžić' first to be on her profile page.",
-      run: async ({ page, checkpoint }) => {
-        await page.getByRole('tab', { name: 'Medical' }).click()
-        await page.waitForTimeout(800)
-        await checkpoint()
-        await page.getByRole('tab', { name: 'Socioeconomic' }).click()
+      run: async ({ page, act }) => {
+        await act('Open Medical tab', async () => {
+          await page.getByRole('tab', { name: 'Medical' }).click()
+          await page.waitForTimeout(800)
+        })
+        await act('Open Socioeconomic tab', () => page.getByRole('tab', { name: 'Socioeconomic' }).click())
       }
     },
     {
@@ -215,11 +226,13 @@ export function buildSteps(): StepDef[] {
       title: 'Step 7 — Fatima Oldest Visit (intake, red flags)',
       say: 'Fatima has 5 visits over 10 weeks. At intake — high blood pressure, obese BMI. The system automatically evaluates each measurement against clinical reference ranges and flags anything outside bounds.',
       requires: "Needs Fatima's profile open (run 'Patient List → Fatima Hadžić' first).",
-      run: async ({ page, state }) => {
-        await page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL"))
-        await page.getByRole('tab', { name: 'Visits' }).click()
-        await page.getByRole('link', { name: 'View' }).last().click() // date-desc list, last row = oldest
-        await page.waitForURL('**/dashboard/visits/**')
+      run: async ({ page, state, act }) => {
+        await act('Open Fatima’s profile', () => page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL")))
+        await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
+        await act('Open oldest visit', async () => {
+          await page.getByRole('link', { name: 'View' }).last().click() // date-desc list, last row = oldest
+          await page.waitForURL('**/dashboard/visits/**')
+        })
       }
     },
     {
@@ -229,11 +242,13 @@ export function buildSteps(): StepDef[] {
       title: 'Step 7b — Fatima Most Recent Visit (improvement)',
       say: 'Eight weeks later — blood pressure normalised, 7.6 kg lost, HbA1c improving. Point to the Weight & BMI Trend chart on the patient profile page.',
       requires: "Needs Fatima's profile open (run 'Patient List → Fatima Hadžić' first).",
-      run: async ({ page, state }) => {
-        await page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL"))
-        await page.getByRole('tab', { name: 'Visits' }).click()
-        await page.getByRole('link', { name: 'View' }).first().click() // first row = most recent
-        await page.waitForURL('**/dashboard/visits/**')
+      run: async ({ page, state, act }) => {
+        await act('Open Fatima’s profile', () => page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL")))
+        await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
+        await act('Open most recent visit', async () => {
+          await page.getByRole('link', { name: 'View' }).first().click() // first row = most recent
+          await page.waitForURL('**/dashboard/visits/**')
+        })
       }
     },
     {
@@ -243,16 +258,17 @@ export function buildSteps(): StepDef[] {
       title: 'Step 8 — AI Diet Plan',
       say: 'The system accepts the request immediately with HTTP 202 and queues the generation. The AI proposes — the clinician decides.',
       requires: "Needs Fatima's profile open. Costs a real OpenAI call unless DRY_RUN=1.",
-      run: async ({ page, state, checkpoint }) => {
-        await page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL"))
-        await page.getByRole('tab', { name: 'Diet Plans' }).click()
-        await checkpoint()
+      run: async ({ page, state, act }) => {
+        await act('Open Fatima’s profile', () => page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL")))
+        await act('Open Diet Plans tab', () => page.getByRole('tab', { name: 'Diet Plans' }).click())
         if (DRY_RUN) return
-        await page.getByRole('button', { name: 'Generate Diet Plan' }).click()
-        await page
-          .getByText(/kcal\/day/)
-          .waitFor({ timeout: 60_000 })
-          .catch(() => {})
+        await act('Generate diet plan', async () => {
+          await page.getByRole('button', { name: 'Generate Diet Plan' }).click()
+          await page
+            .getByText(/kcal\/day/)
+            .waitFor({ timeout: 60_000 })
+            .catch(() => {})
+        })
       }
     },
     {
@@ -262,35 +278,39 @@ export function buildSteps(): StepDef[] {
       title: 'Create Visit + Vitals Live',
       say: "That is the full create flow — a new clinical encounter documented and immediately part of Fatima's longitudinal record. BMI is auto-computed and no flags fire — all values in normal range.",
       requires: "Needs Fatima's profile open. Mutates real data unless DRY_RUN=1.",
-      run: async ({ page, state, checkpoint }) => {
-        await page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL"))
-        await page.getByRole('tab', { name: 'Visits' }).click()
+      run: async ({ page, state, act }) => {
+        await act('Open Fatima’s profile', () => page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL")))
+        await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
         if (DRY_RUN) return
 
-        await page.getByRole('button', { name: 'Add Visit' }).click()
+        await act('Open Add Visit dialog', () => page.getByRole('button', { name: 'Add Visit' }).click())
         const dialog = page.getByRole('dialog')
-        await dialog.getByLabel('Date & Time').fill('2026-06-30T09:00')
-        await dialog
-          .getByLabel('Notes')
-          .fill(
-            'Ten-week programme review. Total weight loss 7.6 kg achieved and maintained. BP 132/83, now within normal range. HbA1c improved to 7.4%. Patient managing dietary plan independently. Transitioning to monthly follow-ups.'
-          )
-        await checkpoint()
-        await dialog.getByRole('button', { name: 'Create Visit' }).click()
+        await act('Fill visit date', () => dialog.getByLabel('Date & Time').fill('2026-06-30T09:00'))
+        await act('Fill visit notes', () =>
+          dialog
+            .getByLabel('Notes')
+            .fill(
+              'Ten-week programme review. Total weight loss 7.6 kg achieved and maintained. BP 132/83, now within normal range. HbA1c improved to 7.4%. Patient managing dietary plan independently. Transitioning to monthly follow-ups.'
+            )
+        )
+        await act('Create visit', () => dialog.getByRole('button', { name: 'Create Visit' }).click())
 
-        await page.getByRole('link', { name: 'View' }).first().click()
-        await page.waitForURL('**/dashboard/visits/**')
+        await act('Open new visit', async () => {
+          await page.getByRole('link', { name: 'View' }).first().click()
+          await page.waitForURL('**/dashboard/visits/**')
+        })
 
-        await page.getByRole('button', { name: 'Record vital signs' }).click()
+        await act('Open vitals dialog', () => page.getByRole('button', { name: 'Record vital signs' }).click())
         const vDialog = page.getByRole('dialog')
-        await vDialog.getByLabel('Weight (kg)').fill('81.2')
-        await vDialog.getByLabel('Height (cm)').fill('162')
-        await vDialog.getByLabel('Systolic BP (mmHg)').fill('132')
-        await vDialog.getByLabel('Diastolic BP (mmHg)').fill('83')
-        await vDialog.getByLabel('Heart Rate (bpm)').fill('80')
-        await vDialog.getByLabel('Temperature (°C)').fill('36.6')
-        await checkpoint()
-        await vDialog.getByRole('button', { name: 'Record' }).click()
+        await act('Fill vitals', async () => {
+          await vDialog.getByLabel('Weight (kg)').fill('81.2')
+          await vDialog.getByLabel('Height (cm)').fill('162')
+          await vDialog.getByLabel('Systolic BP (mmHg)').fill('132')
+          await vDialog.getByLabel('Diastolic BP (mmHg)').fill('83')
+          await vDialog.getByLabel('Heart Rate (bpm)').fill('80')
+          await vDialog.getByLabel('Temperature (°C)').fill('36.6')
+        })
+        await act('Record vitals', () => vDialog.getByRole('button', { name: 'Record' }).click())
       }
     },
     {
@@ -300,15 +320,17 @@ export function buildSteps(): StepDef[] {
       title: 'Stefan Jovanović — Intake Flags',
       say: 'Stefan is a 31-year-old student in an anorexia nervosa recovery programme — the opposite clinical picture. Every measurement flagged at intake.',
       requires: 'Logged in as Doctor (Step 4).',
-      run: async ({ page }) => {
-        await page.goto(`${BASE_URL}/dashboard/patients`)
-        await page.getByPlaceholder('Search by name, phone or other').fill('Stefan')
-        await page.getByRole('row', { name: /Stefan/ }).click()
-        await page.waitForURL('**/dashboard/patients/**')
-        const stefanUrl = page.url()
+      run: async ({ page, act }) => {
+        await act('Open patient list', () => page.goto(`${BASE_URL}/dashboard/patients`))
+        await act('Search for Stefan', () => page.getByPlaceholder('Search by name, phone or other').fill('Stefan'))
+        const stefanUrl = await act('Open Stefan’s profile', async () => {
+          await page.getByRole('row', { name: /Stefan/ }).click()
+          await page.waitForURL('**/dashboard/patients/**')
+          return page.url()
+        })
 
-        await page.getByRole('tab', { name: 'Visits' }).click()
-        await page.getByRole('link', { name: 'View' }).last().click()
+        await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
+        await act('Open oldest visit', () => page.getByRole('link', { name: 'View' }).last().click())
         return { stefanUrl }
       }
     },
@@ -319,10 +341,10 @@ export function buildSteps(): StepDef[] {
       title: 'Stefan Most Recent Visit (recovery)',
       say: 'Seven visits, 14 weeks, 7.7 kg gained. The trend chart tells the full recovery story — including the relapse at week 8 when academic stress triggered restriction episodes.',
       requires: "Needs Stefan's profile open (run 'Stefan Jovanović — Intake Flags' first).",
-      run: async ({ page, state }) => {
-        await page.goto(requireUrl(state.stefanUrl, "Stefan's profile URL"))
-        await page.getByRole('tab', { name: 'Visits' }).click()
-        await page.getByRole('link', { name: 'View' }).first().click()
+      run: async ({ page, state, act }) => {
+        await act('Open Stefan’s profile', () => page.goto(requireUrl(state.stefanUrl, "Stefan's profile URL")))
+        await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
+        await act('Open most recent visit', () => page.getByRole('link', { name: 'View' }).first().click())
       }
     },
 
@@ -333,7 +355,7 @@ export function buildSteps(): StepDef[] {
       segment: 'SEGMENT 5 · Patient',
       title: 'Login as Patient',
       say: 'Patients log in and see exactly one record — their own. No dashboard, no user list.',
-      run: async ({ page }) => login(page, CREDS.patient.email, CREDS.patient.password)
+      run: async ({ page, act }) => act('Log in as Patient', () => login(page, CREDS.patient.email, CREDS.patient.password))
     },
     {
       id: 'patient-restricted',
@@ -342,9 +364,11 @@ export function buildSteps(): StepDef[] {
       title: 'Patient tries the Patients list — role enforcement',
       say: "They cannot navigate to any other patient's data. Role enforcement is not just a UI decision — the API returns 403 for any out-of-scope request, regardless of what the frontend shows.",
       requires: "Logged in as Patient ('Login as Patient' step).",
-      run: async ({ page }) => {
-        await page.goto(`${BASE_URL}/dashboard/patients`)
-        await page.waitForURL('**/dashboard/patients/**', { timeout: 10_000 }).catch(() => {})
+      run: async ({ page, act }) => {
+        await act('Try open Patients list', async () => {
+          await page.goto(`${BASE_URL}/dashboard/patients`)
+          await page.waitForURL('**/dashboard/patients/**', { timeout: 10_000 }).catch(() => {})
+        })
       }
     },
     {

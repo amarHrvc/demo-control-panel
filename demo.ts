@@ -45,7 +45,8 @@ async function main() {
     console.log(`\x1b[1m[${step.instance}] ${step.segment} · ${step.title}\x1b[0m`)
     try {
       const inst = await instanceFor(step.instance)
-      const patch = await step.run({ page: inst.page, state: inst.state, checkpoint: async () => {} })
+      // Terminal mode already pauses between whole steps on Enter, so act() runs straight through.
+      const patch = await step.run({ page: inst.page, state: inst.state, act: (_label, fn) => fn() })
       if (patch) Object.assign(inst.state, patch)
     } catch (err) {
       console.log(`\x1b[33m  ! step action failed, continue manually if needed: ${(err as Error).message.split('\n')[0]}\x1b[0m`)

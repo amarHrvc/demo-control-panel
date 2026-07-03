@@ -430,23 +430,43 @@
   </section>
 
   <section>
-    <div class="divider"><span class="label">05 · Pause &amp; checkpoints</span><span class="rule"></span></div>
+    <div class="divider"><span class="label">05 · Step-through mode</span><span class="rule"></span></div>
     <p>
-      Each instance has an independent <strong>Pause</strong> toggle. A handful
-      of steps call <code>checkpoint()</code> at natural narrative breaks — after
-      a search demo, before a dialog submit — so execution can be frozen there
-      mid-step to catch your breath, without rebuilding every action into an
-      individually resumable micro-step.
+      Every atomic Playwright action inside a step's <code>run()</code> is
+      wrapped in <code>act(label, fn)</code> instead of being called directly.
+      Each instance has an independent <strong>Arm step-through</strong>
+      toggle; while armed, <code>act()</code> blocks <em>after</em> its action
+      completes and stays blocked until the presenter clicks
+      <strong>Continue →</strong> — which releases exactly that one action and
+      re-arms for the next <code>act()</code> call. Arming it once therefore
+      stops you at every logical action in a step, in sequence — open a page,
+      type a search, press enter, click a result — not just the first
+      breakpoint you happen to catch.
     </p>
     <div class="term">
-      <div class="term-title">checkpoint()</div>
-      <pre>step running ──► checkpoint() ──► paused? <span class="dim">──yes──►</span> poll every 200ms
-                                  <span class="dim">│</span>                     <span class="dim">│</span>
-                                  no              <span class="dim">◄────────────┘</span>
-                                  <span class="dim">│</span>                <span class="dim">(until Pause toggled off)</span>
-                                  <span class="dim">▼</span>
-                          continue to next sub-action</pre>
+      <div class="term-title">act(label, fn) — server.ts</div>
+      <pre>result = <span class="hi">await</span> fn()                     <span class="dim">// run the actual Playwright action</span>
+<span class="hi">if</span> (instance.paused) {              <span class="dim">// step-through armed on this instance?</span>
+  instance.waitingLabel = label
+  <span class="hi">await</span> <span class="hi">new</span> Promise(resolve <span class="hi">=></span> {   <span class="dim">// blocks here — no polling loop</span>
+    instance.resumeResolver = resolve
+  })
+}
+<span class="hi">return</span> result</pre>
     </div>
+    <p>
+      <strong>Continue</strong> (<code>POST /instances/:id/continue</code>)
+      calls <code>resumeResolver()</code> for just the current action — the
+      <code>paused</code> flag itself is untouched, so the very next
+      <code>act()</code> call blocks again. Toggling <strong>Arm
+      step-through</strong> off mid-block instead calls
+      <code>resumeResolver()</code> <em>and</em> clears <code>paused</code>,
+      releasing the rest of the step to run unattended. This replaces an
+      earlier design where a single boolean pause flag was checked by a
+      polling loop — that version only froze at whichever checkpoint you
+      caught before the flag flipped back off, then ran the remaining
+      checkpoints in the same step at full speed with no further pausing.
+    </p>
   </section>
 
   <section>
@@ -514,6 +534,20 @@
       one-time snapshot.
     </p>
     <div class="changelog">
+      <div class="entry">
+        <div class="entry-head">
+          <span class="date">2026-07-03</span>
+          <span class="title">Per-action step-through, replacing the single-toggle pause</span>
+        </div>
+        <dl>
+          <dt>What</dt>
+          <dd>Replaced <code>checkpoint()</code> with <code>act(label, fn)</code> in every step. Added a one-shot <code>Continue</code> endpoint/button distinct from the <code>Arm step-through</code> toggle; the panel now shows the label of whatever action it's currently waiting after.</dd>
+          <dt>Why</dt>
+          <dd>Steps only had 2–3 hand-placed checkpoints each, so pausing landed on coarse boundaries covering several actions at once. Worse, the old boolean-toggle pause didn't re-arm itself — resuming once let the rest of the step's checkpoints fly through unattended. Wanted a real step-through: freeze after every logical action, every time, until explicitly told to continue.</dd>
+          <dt>How</dt>
+          <dd>Rewrote every step in <code>steps.ts</code> to wrap each Playwright action in <code>act('label', fn)</code>. In <code>server.ts</code>, <code>act()</code> blocks on a per-call <code>Promise</code> (no polling) when <code>instance.paused</code> is true; a new <code>/continue</code> route resolves just that one block without touching the <code>paused</code> flag, so the next <code>act()</code> blocks again automatically. Disarming step-through mid-block now releases the current wait immediately instead of leaving it frozen. Updated <code>public/app.js</code>/<code>index.html</code> to show a live "waiting after: …" label and a <code>Continue →</code> button, and dropped the panel's poll interval from 4s to 1.5s for snappier feedback.</dd>
+        </dl>
+      </div>
       <div class="entry">
         <div class="entry-head">
           <span class="date">2026-07-03</span>

@@ -35,7 +35,12 @@ interface Instance {
   context: BrowserContext
   page: Page
   state: DemoState
+  /** Step-through mode armed/disarmed — while armed, act() blocks after every action. */
   paused: boolean
+  /** Label of the action just completed, while blocked waiting for Continue. Null when not blocked. */
+  waitingLabel: string | null
+  /** Resolves the current block. Set only while actually waiting; null otherwise. */
+  resumeResolver: (() => void) | null
 }
 
 const instances = new Map<InstanceId, Instance>()
@@ -49,15 +54,34 @@ async function ensureInstance(id: InstanceId): Promise<Instance> {
   const context = await browser.newContext({ viewport: null })
   const page = await context.newPage()
   await tagInstanceWindow(page, id)
-  const instance: Instance = { browser, context, page, state: emptyState(), paused: false }
+  const instance: Instance = {
+    browser,
+    context,
+    page,
+    state: emptyState(),
+    paused: false,
+    waitingLabel: null,
+    resumeResolver: null
+  }
   instances.set(id, instance)
   return instance
 }
 
-async function checkpointFor(instance: Instance) {
-  while (instance.paused) {
-    await new Promise(r => setTimeout(r, 200))
+/**
+ * Runs one atomic step action, then — if step-through is armed — blocks until
+ * /continue releases it. Unlike a plain pause flag, this re-arms itself: each
+ * act() call is its own checkpoint, so staying armed stops you at every one
+ * in sequence rather than only the first one you happen to catch.
+ */
+async function act<T>(instance: Instance, label: string, fn: () => Promise<T>): Promise<T> {
+  const result = await fn()
+  if (instance.paused) {
+    instance.waitingLabel = label
+    await new Promise<void>(resolve => {
+      instance.resumeResolver = resolve
+    })
   }
+  return result
 }
 
 app.get('/api/steps', (_req, res) => {
@@ -82,6 +106,7 @@ app.get('/api/instances', (_req, res) => {
         open: !!inst && !inst.page.isClosed(),
         url: inst && !inst.page.isClosed() ? inst.page.url() : null,
         paused: inst?.paused ?? false,
+        waitingLabel: inst?.waitingLabel ?? null,
         state: inst?.state ?? emptyState()
       }
     })
@@ -107,7 +132,26 @@ app.post('/api/instances/:id/pause', async (req, res) => {
     return
   }
   inst.paused = typeof req.body?.paused === 'boolean' ? req.body.paused : !inst.paused
+  // Disarming mid-block releases it immediately instead of leaving the step frozen forever.
+  if (!inst.paused && inst.resumeResolver) {
+    inst.resumeResolver()
+    inst.resumeResolver = null
+    inst.waitingLabel = null
+  }
   res.json({ ok: true, paused: inst.paused })
+})
+
+app.post('/api/instances/:id/continue', async (req, res) => {
+  const id = req.params.id as InstanceId
+  const inst = instances.get(id)
+  if (!inst || !inst.resumeResolver) {
+    res.status(400).json({ ok: false, error: 'Not currently waiting' })
+    return
+  }
+  inst.resumeResolver()
+  inst.resumeResolver = null
+  inst.waitingLabel = null
+  res.json({ ok: true })
 })
 
 app.post('/api/instances/:id/reset', async (req, res) => {
@@ -132,7 +176,7 @@ app.post('/api/steps/:id/run', async (req, res) => {
     const patch = await step.run({
       page: instance.page,
       state: instance.state,
-      checkpoint: () => checkpointFor(instance)
+      act: (label, fn) => act(instance, label, fn)
     })
     if (patch) Object.assign(instance.state, patch) // atomic: only merged after run() resolves
     res.json({ ok: true, url: instance.page.url() })

@@ -45,11 +45,17 @@ function render() {
             ${status.open ? 'Focus window' : 'Open browser (maximized)'}
           </button>
           <button class="pill-btn ${status.paused ? 'pause-on' : ''}" data-action="pause" data-instance="${instanceId}">
-            ${status.paused ? '⏸ Paused — click to resume' : 'Pause'}
+            ${status.paused ? 'Step-through ON — click to disarm' : 'Arm step-through'}
           </button>
+          ${
+            status.waitingLabel
+              ? `<button class="pill-btn continue" data-action="continue" data-instance="${instanceId}">Continue →</button>`
+              : ''
+          }
           <button class="pill-btn danger" data-action="reset" data-instance="${instanceId}">Reset</button>
         </div>
       </div>
+      ${status.waitingLabel ? `<div class="waiting">⏸ Waiting after: <strong>${escapeHtml(status.waitingLabel)}</strong></div>` : ''}
     `
 
     let lastSegment = null
@@ -88,6 +94,9 @@ function render() {
   })
   appEl.querySelectorAll('[data-action="pause"]').forEach(btn => {
     btn.addEventListener('click', () => togglePause(btn.dataset.instance))
+  })
+  appEl.querySelectorAll('[data-action="continue"]').forEach(btn => {
+    btn.addEventListener('click', () => continueInstance(btn.dataset.instance))
   })
   appEl.querySelectorAll('[data-action="reset"]').forEach(btn => {
     btn.addEventListener('click', () => resetInstance(btn.dataset.instance))
@@ -135,6 +144,11 @@ async function togglePause(id) {
   refreshInstances()
 }
 
+async function continueInstance(id) {
+  await fetch(`/api/instances/${id}/continue`, { method: 'POST' })
+  refreshInstances()
+}
+
 async function resetInstance(id) {
   if (!confirm(`Close and relaunch the ${id} browser? Captured state for it will be cleared.`)) return
   for (const step of steps) {
@@ -159,7 +173,7 @@ async function init() {
   const res = await fetch('/api/steps')
   steps = await res.json()
   await refreshInstances()
-  setInterval(refreshInstances, 4000)
+  setInterval(refreshInstances, 1500) // fast enough to catch a waitingLabel promptly during step-through
 }
 
 init()

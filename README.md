@@ -79,15 +79,18 @@ source is injected into the browser, `__name` is undefined there and the
 whole script throws immediately, silently, before ever creating the
 frame/badge. Keep this as a plain string.
 
-### Pause / checkpoints
+### Pause / step-through
 
-Each instance has an independent pause flag (`Pause` button in its header).
-A handful of steps call `checkpoint()` at natural narrative breaks (after a
-search demo, before a dialog submit, before a final confirm click) — while
-paused, execution blocks there until resumed. This is coarse by design (no
-per-micro-action step-through, no speed multiplier) per a deliberate
-scope call: good enough to catch your breath or freeze mid-step without
-rebuilding every step into individually resumable micro-actions.
+Each instance has an independent step-through arm/disarm toggle (`Arm
+step-through` in its header). Every atomic action inside a step's `run()` is
+wrapped in `act(label, fn)`; while armed, execution blocks *after* the action
+completes and stays blocked until the presenter clicks `Continue →` — which
+advances past exactly that one action and re-arms for the next `act()` call.
+So arming it once stops you at every logical action in sequence (open a
+page, type a search, press enter, click a result — each its own beat) rather
+than only the first breakpoint you happen to catch before it disarms itself.
+Disarming mid-block releases the current action immediately, running the
+rest of the step unattended.
 
 ### Window focus
 
