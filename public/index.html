@@ -105,6 +105,10 @@
     padding: 4px 9px; display: inline-flex; align-items: center; gap: 5px;
   }
   .take-badge .rec-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff5a5a; }
+  .take-badge.stale { color: #ffcf8a; background: #4a3320; }
+
+  #recording-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  #recording-status { font-size: 11px; color: #8b92a3; }
 
   #recordings-section { margin-top: 30px; }
   #recordings-section h2 { font-size: 14px; margin: 0 0 10px; color: #8b92a3; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
@@ -124,6 +128,10 @@
     <button class="pill-btn" data-action="set-base-url">Set</button>
     <button class="pill-btn" data-action="quick-local">Local</button>
     <span id="base-url-status"></span>
+  </div>
+  <div id="recording-bar">
+    <button class="pill-btn" data-action="toggle-recording">Recording: …</button>
+    <span id="recording-status"></span>
   </div>
 </header>
 <div id="teleprompter">

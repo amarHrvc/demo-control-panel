@@ -3,6 +3,8 @@ const teleprompterEl = document.getElementById('teleprompter')
 const teleprompterTextEl = document.getElementById('teleprompter-text')
 const baseUrlInput = document.getElementById('base-url-input')
 const baseUrlStatus = document.getElementById('base-url-status')
+const recordingToggleBtn = document.querySelector('[data-action="toggle-recording"]')
+const recordingStatusEl = document.getElementById('recording-status')
 
 const INSTANCE_COLORS = { admin: '#e53935', doctor: '#1e88e5', patient: '#43a047' }
 
@@ -20,7 +22,18 @@ function showTeleprompter(text) {
   teleprompterEl.classList.add('show')
 }
 
+function renderRecordingToggle() {
+  const anyStatus = Object.values(instanceStatus)[0]
+  const enabled = anyStatus?.recordingEnabled ?? false
+  recordingToggleBtn.textContent = enabled ? 'Recording: ON' : 'Recording: OFF'
+  recordingToggleBtn.classList.toggle('record', enabled)
+  recordingStatusEl.textContent = enabled
+    ? 'New/reset instances will record. Already-open windows need Reset to start.'
+    : ''
+}
+
 function render() {
+  renderRecordingToggle()
   appEl.innerHTML = ''
   const byInstance = {}
   for (const step of steps) {
@@ -44,9 +57,11 @@ function render() {
         </div>
         <div class="instance-actions">
           ${
-            status.recordingEnabled
-              ? `<span class="take-badge"><span class="rec-dot"></span>${status.takeNumber ? `take ${status.takeNumber}` : 'not recording yet'}</span>`
-              : ''
+            status.recordingActive
+              ? `<span class="take-badge"><span class="rec-dot"></span>take ${status.takeNumber}</span>`
+              : status.recordingEnabled && status.open
+                ? `<span class="take-badge stale" title="Recording was turned on after this window opened — Reset to start capturing it">not recording — Reset to apply</span>`
+                : ''
           }
           <button class="pill-btn" data-action="open" data-instance="${instanceId}">
             ${status.open ? 'Focus window' : 'Open browser (maximized)'}
@@ -60,7 +75,7 @@ function render() {
               : ''
           }
           ${
-            status.recordingEnabled && status.open
+            status.recordingActive
               ? `<button class="pill-btn record" data-action="new-take" data-instance="${instanceId}">New Take</button>`
               : ''
           }
@@ -187,10 +202,10 @@ async function newTake(id) {
   await refreshRecordings()
 }
 
-function renderRecordings(takes) {
+function renderRecordings(enabled, takes) {
   const listEl = document.getElementById('recordings-list')
   const sectionEl = document.getElementById('recordings-section')
-  if (!takes) {
+  if (!enabled && takes.length === 0) {
     sectionEl.style.display = 'none'
     return
   }
@@ -218,7 +233,7 @@ async function refreshRecordings() {
   try {
     const res = await fetch('/api/recordings')
     const json = await res.json()
-    renderRecordings(json.enabled ? json.takes : null)
+    renderRecordings(json.enabled, json.takes)
   } catch {
     // panel server not reachable
   }
@@ -270,6 +285,20 @@ document.querySelector('[data-action="quick-local"]').addEventListener('click', 
 baseUrlInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') setBaseUrl(baseUrlInput.value)
 })
+
+async function toggleRecording() {
+  const anyStatus = Object.values(instanceStatus)[0]
+  const nextEnabled = !(anyStatus?.recordingEnabled ?? false)
+  await fetch('/api/recording', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: nextEnabled })
+  })
+  await refreshInstances()
+  await refreshRecordings()
+}
+
+recordingToggleBtn.addEventListener('click', toggleRecording)
 
 async function init() {
   const res = await fetch('/api/steps')

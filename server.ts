@@ -22,7 +22,16 @@ import express from 'express'
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 import { fileURLToPath } from 'node:url'
 import { buildSteps, emptyState, tagInstanceWindow, setBaseUrl, BASE_URL, INSTANCE_IDS, type DemoState, type InstanceId } from './steps.ts'
-import { RECORDING_ENABLED, RECORDINGS_DIR, RECORDINGS_ROOT, startTake, finalizeTake, listTakes, type OpenTake } from './recordings.ts'
+import {
+  isRecordingEnabled,
+  setRecordingEnabled,
+  RECORDINGS_DIR,
+  RECORDINGS_ROOT,
+  startTake,
+  finalizeTake,
+  listTakes,
+  type OpenTake
+} from './recordings.ts'
 
 const PANEL_PORT = Number(process.env.PANEL_PORT ?? 4949)
 const PUBLIC_DIR = fileURLToPath(new URL('./public', import.meta.url))
@@ -67,9 +76,10 @@ async function ensureInstance(id: InstanceId): Promise<Instance> {
   if (existing && !existing.page.isClosed()) return existing
 
   const browser = await chromium.launch({ headless: false, slowMo: 150, args: ['--start-maximized'] })
+  const recordThisInstance = isRecordingEnabled()
   const context = await browser.newContext({
     viewport: null,
-    ...(RECORDING_ENABLED ? { recordVideo: { dir: RECORDINGS_DIR, size: { width: 1920, height: 1080 } } } : {})
+    ...(recordThisInstance ? { recordVideo: { dir: RECORDINGS_DIR, size: { width: 1920, height: 1080 } } } : {})
   })
   const page = await context.newPage()
   await tagInstanceWindow(page, id)
@@ -81,7 +91,7 @@ async function ensureInstance(id: InstanceId): Promise<Instance> {
     paused: false,
     waitingLabel: null,
     resumeResolver: null,
-    recording: RECORDING_ENABLED ? beginTake(id, page, 1, null) : null
+    recording: recordThisInstance ? beginTake(id, page, 1, null) : null
   }
   instances.set(id, instance)
   return instance
@@ -128,7 +138,8 @@ app.get('/api/instances', (_req, res) => {
         paused: inst?.paused ?? false,
         waitingLabel: inst?.waitingLabel ?? null,
         state: inst?.state ?? emptyState(),
-        recordingEnabled: RECORDING_ENABLED,
+        recordingEnabled: isRecordingEnabled(),
+        recordingActive: !!inst?.recording,
         takeNumber: inst?.recording?.takeNumber ?? null
       }
     })
@@ -189,13 +200,9 @@ app.post('/api/instances/:id/reset', async (req, res) => {
 
 app.post('/api/instances/:id/new-take', async (req, res) => {
   const id = req.params.id as InstanceId
-  if (!RECORDING_ENABLED) {
-    res.status(400).json({ ok: false, error: 'Recording is off (start the panel with RECORD=1)' })
-    return
-  }
   const inst = instances.get(id)
   if (!inst || !inst.recording) {
-    res.status(400).json({ ok: false, error: 'Instance not open yet' })
+    res.status(400).json({ ok: false, error: 'This instance is not currently recording — Reset it after enabling recording to pick up a new take' })
     return
   }
   const label = typeof req.body?.label === 'string' && req.body.label.trim() ? req.body.label.trim() : null
@@ -213,7 +220,17 @@ app.post('/api/instances/:id/new-take', async (req, res) => {
 })
 
 app.get('/api/recordings', (_req, res) => {
-  res.json({ enabled: RECORDING_ENABLED, takes: listTakes() })
+  res.json({ enabled: isRecordingEnabled(), takes: listTakes() })
+})
+
+app.post('/api/recording', (req, res) => {
+  const enabled = req.body?.enabled
+  if (typeof enabled !== 'boolean') {
+    res.status(400).json({ ok: false, error: 'enabled (boolean) is required' })
+    return
+  }
+  setRecordingEnabled(enabled)
+  res.json({ ok: true, enabled: isRecordingEnabled() })
 })
 
 app.get('/api/base-url', (_req, res) => {
@@ -263,7 +280,7 @@ app.post('/api/steps/:id/run', async (req, res) => {
 
 app.listen(PANEL_PORT, () => {
   console.log(`Demo control panel: http://localhost:${PANEL_PORT}`)
-  if (RECORDING_ENABLED) console.log(`Recording ON — takes saved under ${RECORDINGS_DIR}`)
+  if (isRecordingEnabled()) console.log(`Recording ON — takes saved under ${RECORDINGS_DIR}`)
 })
 
 // Ctrl+C mid-recording would otherwise kill Chromium before its video is muxed/finalized,

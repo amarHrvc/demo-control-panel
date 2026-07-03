@@ -24,7 +24,10 @@ The target app (NutriBase frontend + backend) must be running separately —
 this repo only drives a browser against it, it doesn't host it.
 
 ```bash
-BASE_URL=http://localhost:3000 npm run panel
+BASE_URL=http://localhost:3000 npm run panel        # bash / zsh
+```
+```powershell
+$env:BASE_URL='http://localhost:3000'; npm run panel # PowerShell
 ```
 
 `BASE_URL` defaults to `http://localhost:3000`, and is only the *initial*
@@ -43,7 +46,10 @@ Fatima, and generating an AI diet plan (an actual OpenAI call). Set
 `DRY_RUN=1` to skip just those two while rehearsing:
 
 ```bash
-DRY_RUN=1 npm run panel
+DRY_RUN=1 npm run panel        # bash / zsh
+```
+```powershell
+$env:DRY_RUN='1'; npm run panel # PowerShell
 ```
 
 Run without `DRY_RUN` only when you actually want those effects (the real
@@ -53,24 +59,35 @@ defense, or a deliberate re-seed-and-redo).
 
 If you want a backup clip library in case the live environment (e.g. the
 Railway deploy) misbehaves mid-presentation, rehearse locally with
-recording on:
+recording on. Either start the panel with it already on:
 
 ```bash
-RECORD=1 npm run panel
+RECORD=1 npm run panel        # bash / zsh
+```
+```powershell
+$env:RECORD='1'; npm run panel # PowerShell
 ```
 
-Each instance records continuously from the moment it opens. Click **New
-Take** in an instance's header to close out the current clip and start a
-fresh one in the same login session (cookies carry over — no re-login
-needed) — do this at natural breakpoints, e.g. per segment, so you end up
-with short clips you can swap in for just the part that failed live rather
-than one long recording. You'll be prompted for an optional label.
+...or flip the **Recording: OFF/ON** toggle in the panel header at any
+time. The toggle only affects instances **opened or reset after** you flip
+it — Playwright only accepts its recording config when a browser context is
+created, so it can't retroactively start recording a window that's already
+open. If you toggle it on mid-session, any already-open instance shows a
+"not recording — Reset to apply" hint; hit that instance's Reset to pick it
+up (this closes and relaunches just that one browser).
+
+Each recording instance captures continuously from the moment it opens.
+Click **New Take** in an instance's header to close out the current clip
+and start a fresh one in the same login session (cookies carry over — no
+re-login needed) — do this at natural breakpoints, e.g. per segment, so you
+end up with short clips you can swap in for just the part that failed live
+rather than one long recording. You'll be prompted for an optional label.
 
 Finished takes show up in the **Recordings** section at the bottom of the
 panel with a link to the `.webm`. Files land under `recordings/<session
 timestamp>/` and metadata (instance, take number, label, timestamps) is
 tracked in `recordings.db` (SQLite) — both are gitignored. Recording is off
-by default; `npm run panel` without `RECORD=1` behaves exactly as before.
+by default; leaving it off behaves exactly as before.
 
 ## Architecture
 

@@ -538,6 +538,20 @@
       <div class="entry">
         <div class="entry-head">
           <span class="date">2026-07-03</span>
+          <span class="title">Runtime recording toggle, replacing the RECORD=1-only switch</span>
+        </div>
+        <dl>
+          <dt>What</dt>
+          <dd><code>recordings.ts</code>'s <code>RECORDING_ENABLED</code> constant became a mutable flag behind <code>isRecordingEnabled()</code> / <code>setRecordingEnabled()</code>, with the SQLite DB and recordings directory now created lazily on first enable rather than only at process start. New <code>POST /api/recording</code> toggles it; the panel header got a <strong>Recording: OFF/ON</strong> button. <code>/api/instances</code> now reports both <code>recordingEnabled</code> (the global toggle) and <code>recordingActive</code> (whether <em>this</em> open instance actually has a live recording context) — when they disagree, the instance's header shows a "not recording — Reset to apply" hint instead of the New Take button.</dd>
+          <dt>Why</dt>
+          <dd><code>RECORD=1 npm run panel</code> required knowing in advance you wanted a rehearsal recording and restarting the whole panel to change your mind — annoying mid-rehearsal, and doubly so on the presenter's Windows/PowerShell setup, where the bash-style <code>VAR=1 cmd</code> prefix doesn't work at all (see the base-URL entry below for the PowerShell env-var fix that prompted noticing this). A UI toggle removes both restart and shell-syntax friction.</dd>
+          <dt>How</dt>
+          <dd>Playwright only accepts <code>recordVideo</code> when a <code>BrowserContext</code> is created — there's no way to attach recording to an already-open context. So the toggle is necessarily forward-only: <code>ensureInstance()</code> in <code>server.ts</code> reads <code>isRecordingEnabled()</code> at the moment it creates a new context, meaning flipping the toggle only changes behavior for instances opened or <code>Reset</code> after the flip. The distinct <code>recordingActive</code> field (set once per instance at creation, independent of the live global flag) is what lets the UI detect and surface that mismatch instead of silently doing nothing.</dd>
+        </dl>
+      </div>
+      <div class="entry">
+        <div class="entry-head">
+          <span class="date">2026-07-03</span>
           <span class="title">Manual-take video recording for a local fallback clip library</span>
         </div>
         <dl>
