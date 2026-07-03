@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Control Panel — How It Works</title>
+<style>
+  :root {
+    --paper: #f4f5f7;
+    --ink: #1a1e27;
+    --ink-dim: #565f72;
+    --rule: #d8dbe2;
+    --accent: #3a4a8f;
+    --accent-soft: #eef0fb;
+    --code-bg: #0c0d12;
+    --code-ink: #dfe3f0;
+    --code-dim: #7d869c;
+    --admin: #e53935;
+    --doctor: #1e88e5;
+    --patient: #43a047;
+    --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --font-body: ui-sans-serif, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #14161c;
+      --ink: #e7e9f0;
+      --ink-dim: #9aa2b8;
+      --rule: #2b2f3b;
+      --accent: #8b9eff;
+      --accent-soft: #212440;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14161c;
+    --ink: #e7e9f0;
+    --ink-dim: #9aa2b8;
+    --rule: #2b2f3b;
+    --accent: #8b9eff;
+    --accent-soft: #212440;
+  }
+  :root[data-theme="light"] {
+    --paper: #f4f5f7;
+    --ink: #1a1e27;
+    --ink-dim: #565f72;
+    --rule: #d8dbe2;
+    --accent: #3a4a8f;
+    --accent-soft: #eef0fb;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.6;
+  }
+  main {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 56px 24px 120px;
+  }
+
+  header.doc-head {
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: var(--font-mono);
+    font-size: clamp(26px, 4vw, 34px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  .lede {
+    color: var(--ink-dim);
+    font-size: 16px;
+    max-width: 62ch;
+    margin: 0;
+  }
+  .origin {
+    margin-top: 18px;
+    font-size: 13.5px;
+    color: var(--ink-dim);
+    border-left: 3px solid var(--rule);
+    padding-left: 12px;
+  }
+  .origin code { color: var(--ink); }
+
+  /* role legend, echoes the panel's own instance header (dot + name) */
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+  .legend .item { display: flex; align-items: center; gap: 7px; color: var(--ink-dim); }
+  .legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  /* terminal-style section divider, borrowed from demo.ts's own console rule */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 52px 0 22px;
+  }
+  .divider .rule { flex: 1; height: 1px; background: var(--rule); }
+  .divider .label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  section:first-of-type .divider { margin-top: 0; }
+
+  h2 {
+    font-family: var(--font-mono);
+    font-size: 19px;
+    margin: 0 0 14px;
+    letter-spacing: -0.005em;
+  }
+  h3 {
+    font-family: var(--font-mono);
+    font-size: 14.5px;
+    color: var(--ink);
+    margin: 26px 0 8px;
+  }
+  p { margin: 0 0 14px; max-width: 66ch; }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 6px; max-width: 62ch; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  /* terminal / diagram panels stay dark in both themes — mirrors demo.ts's actual headed console output */
+  .term {
+    background: var(--code-bg);
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 16px 0 20px;
+    border: 1px solid #22242e;
+  }
+  .term .term-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--code-dim);
+    padding: 10px 16px 0;
+  }
+  .term pre {
+    margin: 0;
+    padding: 14px 18px 18px;
+    font-family: var(--font-mono);
+    font-size: 12.6px;
+    line-height: 1.55;
+    color: var(--code-ink);
+    white-space: pre;
+  }
+  .term .role-admin { color: var(--admin); }
+  .term .role-doctor { color: var(--doctor); }
+  .term .role-patient { color: var(--patient); }
+  .term .dim { color: var(--code-dim); }
+  .term .hi { color: #ffd479; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 22px;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    font-weight: 600;
+  }
+  td code { white-space: nowrap; }
+  td.note { color: var(--ink-dim); font-size: 13px; }
+
+  .flag-box {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 6px 6px 0;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 13.8px;
+  }
+  .flag-box strong { color: var(--accent); }
+
+  .gotcha {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--admin);
+    border-radius: 0 6px 6px 0;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 13.8px;
+  }
+  .gotcha strong { color: var(--admin); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    letter-spacing: 0.03em;
+  }
+
+  @media (max-width: 560px) {
+    main { padding: 36px 16px 90px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="doc-head">
+    <p class="eyebrow">Internal Documentation</p>
+    <h1>Demo Control Panel — How It Works</h1>
+    <p class="lede">
+      A Playwright-driven live-demo runner for the NutriBase app. It opens real,
+      headed Chromium windows — one per role — and clicks them through a
+      scripted clinical demo so a presenter can drive it live or record it,
+      instead of improvising through the real app on stage.
+    </p>
+    <div class="origin">
+      Extracted from <code>nutri-ledger/_docs_uni/presentation/demo-runner</code>
+      into its own repository so it can evolve independently of the app monorepo.
+    </div>
+    <div class="legend">
+      <span class="item"><span class="dot" style="background:var(--admin)"></span>admin</span>
+      <span class="item"><span class="dot" style="background:var(--doctor)"></span>doctor</span>
+      <span class="item"><span class="dot" style="background:var(--patient)"></span>patient</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="divider"><span class="label">01 · Architecture</span><span class="rule"></span></div>
+    <p>
+      Three persistent Chromium instances — one per role, since each needs its
+      own login session — are owned by a small Express server. Two front ends
+      trigger the same shared step definitions against those instances: a
+      clickable web panel, or a terminal script that runs everything in order.
+    </p>
+
+    <div class="term">
+      <div class="term-title">system diagram</div>
+      <pre><span class="dim">┌────────────────────────────┐</span>        HTTP, localhost:4949
+<span class="dim">│</span> Browser (you)               <span class="dim">│</span><span class="dim">◄──────────────────────────────┐</span>
+<span class="dim">│</span> public/index.html + app.js  <span class="dim">│</span>                                <span class="dim">│</span>
+<span class="dim">└──────────────┬─────────────┘</span>                                <span class="dim">│</span>
+               <span class="dim">│</span> fetch /api/*                                  <span class="dim">│</span>
+               <span class="dim">▼</span>                                                <span class="dim">│</span>
+<span class="dim">┌───────────────────────────────────────────────────────────┴─┐</span>
+<span class="dim">│</span>              <span class="hi">server.ts</span>  —  Express, port 4949                  <span class="dim">│</span>
+<span class="dim">│</span>  GET  /api/steps           list of step definitions          <span class="dim">│</span>
+<span class="dim">│</span>  GET  /api/instances       open / paused / state per role     <span class="dim">│</span>
+<span class="dim">│</span>  POST /api/instances/:id/open · pause · reset                 <span class="dim">│</span>
+<span class="dim">│</span>  POST /api/steps/:id/run   runs one step on its instance       <span class="dim">│</span>
+<span class="dim">└──────────────┬────────────────┬────────────────┬─────────────┘</span>
+               <span class="dim">│</span> owns            <span class="dim">│</span> owns            <span class="dim">│</span> owns
+               <span class="dim">▼</span>                <span class="dim">▼</span>                <span class="dim">▼</span>
+     <span class="dim">┌─────────────┐</span>   <span class="dim">┌─────────────┐</span>   <span class="dim">┌─────────────┐</span>
+     <span class="dim">│</span> Chromium     <span class="dim">│</span>   <span class="dim">│</span> Chromium     <span class="dim">│</span>   <span class="dim">│</span> Chromium     <span class="dim">│</span>
+     <span class="dim">│</span> <span class="role-admin">ADMIN</span>        <span class="dim">│</span>   <span class="dim">│</span> <span class="role-doctor">DOCTOR</span>       <span class="dim">│</span>   <span class="dim">│</span> <span class="role-patient">PATIENT</span>      <span class="dim">│</span>
+     <span class="dim">│</span> red frame    <span class="dim">│</span>   <span class="dim">│</span> blue frame   <span class="dim">│</span>   <span class="dim">│</span> green frame  <span class="dim">│</span>
+     <span class="dim">└──────┬──────┘</span>   <span class="dim">└──────┬──────┘</span>   <span class="dim">└──────┬──────┘</span>
+            <span class="dim">└─────────────────┴─────────────────┘</span>
+                              <span class="dim">│</span> drives via Playwright
+                              <span class="dim">▼</span>
+                 <span class="hi">NutriBase app</span>  —  BASE_URL, default :3000
+                 frontend + backend, run separately</pre>
+    </div>
+
+    <div class="flag-box">
+      <strong>Not self-hosting.</strong> This repo only drives a browser against
+      NutriBase — it never serves the app itself. NutriBase's frontend and
+      backend must already be running at <code>BASE_URL</code> before you start
+      the panel or the terminal script.
+    </div>
+  </section>
+
+  <section>
+    <div class="divider"><span class="label">02 · The two front ends</span><span class="rule"></span></div>
+    <table>
+      <thead>
+        <tr><th>Entry point</th><th>Command</th><th>Behavior</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>server.ts</code></td>
+          <td><code>npm run panel</code></td>
+          <td>Web UI at <code>:4949</code>. Every step is an independent button — click any
+            step on any instance in any order. Built for live presenting: recover
+            from a skipped step without restarting.</td>
+        </tr>
+        <tr>
+          <td><code>demo.ts</code></td>
+          <td><code>npm run demo</code></td>
+          <td>Terminal fallback. Runs every step from <code>steps.ts</code> in
+            fixed order, printing the talking point after each one and waiting
+            for <code>Enter</code> before advancing.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      Both are thin — all step logic lives once, in <code>steps.ts</code>. Neither
+      front end contains any Playwright actions itself; they only call
+      <code>step.run()</code> against whichever instance the step belongs to.
+    </p>
+  </section>
+
+  <section>
+    <div class="divider"><span class="label">03 · Running one step</span><span class="rule"></span></div>
+    <p>
+      Clicking <strong>Run</strong> on a card in the panel walks through the
+      same path every step takes, in the web UI:
+    </p>
+    <div class="term">
+      <div class="term-title">request sequence — POST /api/steps/fatima-profile/run</div>
+      <pre>you (browser)        server.ts                      Chromium page
+     <span class="dim">│</span>                          <span class="dim">│</span>                              <span class="dim">│</span>
+     <span class="dim">│</span>── click "Run" ──────────►│                              <span class="dim">│</span>
+     <span class="dim">│</span>                          <span class="dim">│</span>── ensureInstance(<span class="role-doctor">'doctor'</span>) ─►│
+     <span class="dim">│</span>                          <span class="dim">│</span>   <span class="dim">(reuses the open page, or</span>          <span class="dim">│</span>
+     <span class="dim">│</span>                          <span class="dim">│</span>    <span class="dim">launches maximized Chromium)</span>       <span class="dim">│</span>
+     <span class="dim">│</span>                          <span class="dim">│</span>                              <span class="dim">│</span>
+     <span class="dim">│</span>                          <span class="dim">│</span>── step.run({page, state, ──►│  click / fill / goto
+     <span class="dim">│</span>                          <span class="dim">│</span>    checkpoint})               <span class="dim">│</span>  against NutriBase
+     <span class="dim">│</span>                          <span class="dim">│</span>                              <span class="dim">│</span>
+     <span class="dim">│</span>                          <span class="dim">│</span>◄── Partial&lt;DemoState&gt; ──────│
+     <span class="dim">│</span>                          <span class="dim">│</span>   <span class="hi">merged only if run()</span>            <span class="dim">│</span>
+     <span class="dim">│</span>                          <span class="dim">│</span>   <span class="hi">resolved without throwing</span>       <span class="dim">│</span>
+     <span class="dim">│</span>◄── { ok: true, url } ────│                              <span class="dim">│</span>
+     <span class="dim">│</span>  card turns green         <span class="dim">│</span>                              <span class="dim">│</span></pre>
+    </div>
+    <p>
+      A step that throws mid-way — a selector that doesn't match, a timeout —
+      responds <code>500</code> and its card turns red with the error message,
+      but the instance's state is left exactly as it was: the patch is only
+      applied with <code>Object.assign(instance.state, patch)</code> after
+      <code>run()</code> resolves successfully, never partially.
+    </p>
+  </section>
+
+  <section>
+    <div class="divider"><span class="label">04 · Shared state per instance</span><span class="rule"></span></div>
+    <p>
+      Each role instance carries its own small <code>DemoState</code> —
+      currently just two captured profile URLs, filled in by earlier steps and
+      read by later ones on the same instance:
+    </p>
+    <div class="term">
+      <div class="term-title">steps.ts</div>
+      <pre><span class="dim">interface</span> DemoState {
+  fatimaUrl: <span class="hi">string</span>   <span class="dim">// set by "Patient List → Fatima Hadžić"</span>
+  stefanUrl: <span class="hi">string</span>   <span class="dim">// set by "Stefan Jovanović — Intake Flags"</span>
+}</pre>
+    </div>
+    <p>
+      This is why some cards say <em>"Requires: run X first"</em> — it's a
+      readable hint in the UI, not an enforced lock. Running a step out of
+      order that reads an unset URL fails fast with a clear message
+      (<code>"Fatima's profile URL not captured yet — run that patient's
+      list/lookup step first."</code>) rather than clicking blind.
+    </p>
+  </section>
+
+  <section>
+    <div class="divider"><span class="label">05 · Pause &amp; checkpoints</span><span class="rule"></span></div>
+    <p>
+      Each instance has an independent <strong>Pause</strong> toggle. A handful
+      of steps call <code>checkpoint()</code> at natural narrative breaks — after
+      a search demo, before a dialog submit — so execution can be frozen there
+      mid-step to catch your breath, without rebuilding every action into an
+      individually resumable micro-step.
+    </p>
+    <div class="term">
+      <div class="term-title">checkpoint()</div>
+      <pre>step running ──► checkpoint() ──► paused? <span class="dim">──yes──►</span> poll every 200ms
+                                  <span class="dim">│</span>                     <span class="dim">│</span>
+                                  no              <span class="dim">◄────────────┘</span>
+                                  <span class="dim">│</span>                <span class="dim">(until Pause toggled off)</span>
+                                  <span class="dim">▼</span>
+                          continue to next sub-action</pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="divider"><span class="label">06 · Telling instances apart</span><span class="rule"></span></div>
+    <p>
+      Once you have three maximized Chromium windows spread across two
+      monitors, <code>tagInstanceWindow()</code> injects a colored inset frame
+      and a corner badge into every page each instance loads — red for admin,
+      blue for doctor, green for patient — via <code>page.addInitScript()</code>.
+      A <code>MutationObserver</code> reinstalls it if a client-side route
+      change ever strips it.
+    </p>
+    <div class="gotcha">
+      <strong>Gotcha — already fixed, don't reintroduce it.</strong>
+      That init script is passed as a raw <em>string</em>, not a function.
+      Playwright normally accepts a function and serializes it via
+      <code>.toString()</code> — but <code>tsx</code>'s esbuild transform
+      injects a <code>__name(...)</code> helper call into named
+      functions/arrows for stack-trace preservation, and that helper only
+      exists in the Node runtime. Once injected into the browser it throws
+      immediately and silently, before the frame or badge ever appears.
+    </div>
+  </section>
+
+  <section>
+    <div class="divider"><span class="label">07 · Rehearsing safely</span><span class="rule"></span></div>
+    <p>
+      Two steps have real side effects: <strong>Create Visit + Vitals Live</strong>
+      mutates real patient data, and the <strong>AI Diet Plan</strong> step makes
+      an actual OpenAI API call. Setting <code>DRY_RUN=1</code> makes both steps
+      short-circuit right after navigating to the right tab — everything else
+      in the demo runs normally.
+    </p>
+    <div class="term">
+      <div class="term-title">rehearsal vs. the real thing</div>
+      <pre><span class="dim">$</span> DRY_RUN=1 npm run panel     <span class="dim"># rehearse — no data written, no API cost</span>
+<span class="dim">$</span> npm run panel               <span class="dim"># the real defense, or a deliberate re-seed</span></pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="divider"><span class="label">08 · Not built yet</span><span class="rule"></span></div>
+    <ul>
+      <li>
+        <strong>Video recording.</strong> Playwright's
+        <code>recordVideo</code> would fit a "shoot small takes, redo just the
+        broken one" workflow — each page becomes a take, and a future
+        <em>New Take</em> action would close the page (finalizing its
+        <code>.webm</code>) and open a fresh one in the same context, so
+        cookies and login survive between takes.
+      </li>
+      <li>
+        <strong>Secondary-monitor auto-positioning.</strong> Deliberately
+        skipped — instances launch maximized wherever Windows opens them, and
+        get dragged to the second monitor by hand.
+      </li>
+    </ul>
+  </section>
+
+  <footer>
+    demo-control-panel · steps.ts / server.ts / demo.ts / public/ · driving NutriBase via Playwright
+  </footer>
+</main>
+</body>
+</html>
