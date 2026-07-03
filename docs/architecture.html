@@ -235,6 +235,41 @@
     letter-spacing: 0.03em;
   }
 
+  .changelog { display: flex; flex-direction: column; gap: 22px; }
+  .entry {
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 14px 18px 16px;
+  }
+  .entry .entry-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .entry .date {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-dim);
+  }
+  .entry .title { font-weight: 600; font-size: 14.5px; }
+  .entry dl { margin: 0; }
+  .entry dt {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-top: 8px;
+  }
+  .entry dt:first-child { margin-top: 0; }
+  .entry dd {
+    margin: 3px 0 0;
+    font-size: 13.8px;
+    max-width: 64ch;
+  }
+
   @media (max-width: 560px) {
     main { padding: 36px 16px 90px; }
   }
@@ -469,6 +504,31 @@
         get dragged to the second monitor by hand.
       </li>
     </ul>
+  </section>
+
+  <section>
+    <div class="divider"><span class="label">09 · Change log</span><span class="rule"></span></div>
+    <p>
+      Every subsequent change to this project gets an entry here — what
+      changed, why, and how — so the doc stays a running trace instead of a
+      one-time snapshot.
+    </p>
+    <div class="changelog">
+      <div class="entry">
+        <div class="entry-head">
+          <span class="date">2026-07-03</span>
+          <span class="title">Initial architecture documentation</span>
+        </div>
+        <dl>
+          <dt>What</dt>
+          <dd>Wrote this document: system diagram, request-flow sequence, state model, pause/checkpoint mechanics, window-tagging gotcha, and dry-run behavior.</dd>
+          <dt>Why</dt>
+          <dd>Repo was just extracted from <code>nutri-ledger</code> into its own project; needed a single reference explaining how the pieces fit before further work continues here.</dd>
+          <dt>How</dt>
+          <dd>Read <code>server.ts</code>, <code>demo.ts</code>, <code>steps.ts</code>, and <code>public/app.js</code> directly and documented actual current behavior, not aspirational design.</dd>
+        </dl>
+      </div>
+    </div>
   </section>
 
   <footer>
