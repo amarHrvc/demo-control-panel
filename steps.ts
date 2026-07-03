@@ -27,10 +27,19 @@ export function setBaseUrl(url: string): void {
   BASE_URL = trimmed
 }
 
+/** Reads a required demo-account credential from the environment — see .env.example. */
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) {
+    throw new Error(`Missing ${name} — copy .env.example to .env and fill in the demo account credentials.`)
+  }
+  return value
+}
+
 export const CREDS = {
-  admin: { email: 'hajrovica@gmail.com', password: 'Test12345' },
-  doctor: { email: 'doctor@nutribase.test', password: 'password' },
-  patient: { email: 'fatima.hadzic@nutribase.test', password: 'password' }
+  admin: { email: requireEnv('ADMIN_EMAIL'), password: requireEnv('ADMIN_PASSWORD') },
+  doctor: { email: requireEnv('DOCTOR_EMAIL'), password: requireEnv('DOCTOR_PASSWORD') },
+  patient: { email: requireEnv('PATIENT_EMAIL'), password: requireEnv('PATIENT_PASSWORD') }
 }
 
 export type InstanceId = 'admin' | 'doctor' | 'patient'

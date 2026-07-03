@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "demo": "tsx demo.ts",
-    "panel": "tsx server.ts",
+    "demo": "tsx --env-file-if-exists=.env demo.ts",
+    "panel": "tsx --env-file-if-exists=.env server.ts",
     "install-browser": "playwright install chromium"
   },
   "dependencies": {
