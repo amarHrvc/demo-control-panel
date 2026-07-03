@@ -91,6 +91,10 @@ async function ensureInstance(id: InstanceId): Promise<Instance> {
   const page = await context.newPage()
   await tagInstanceWindow(page, id)
   await installVisualCues(page)
+  // Land on a real start point instead of a blank tab: the dashboard if this browser already
+  // carries a valid session (unlikely right after a fresh launch), or wherever the app's auth
+  // guard redirects otherwise (login) — same behavior as new-take, for open and reset alike.
+  await page.goto(`${BASE_URL}/dashboard/home`).catch(() => {})
   const instance: Instance = {
     browser,
     context,
