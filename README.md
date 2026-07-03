@@ -27,7 +27,14 @@ this repo only drives a browser against it, it doesn't host it.
 BASE_URL=http://localhost:3000 npm run panel
 ```
 
-`BASE_URL` defaults to `http://localhost:3000`.
+`BASE_URL` defaults to `http://localhost:3000`, and is only the *initial*
+value for `npm run panel` — the web panel's header has a base-URL bar
+(text field + `Set` + a `Local` quick button) that repoints the demo at any
+running environment, e.g. a Railway-hosted deploy, without restarting the
+process. Switching it closes any open role browsers, since a session logged
+into the old environment would otherwise sit there silently pointed at the
+wrong app. `npm run demo` (the terminal runner) does not have this control —
+it only reads `BASE_URL` once at startup.
 
 ## Rehearsing without side effects
 

@@ -1,6 +1,8 @@
 const appEl = document.getElementById('app')
 const teleprompterEl = document.getElementById('teleprompter')
 const teleprompterTextEl = document.getElementById('teleprompter-text')
+const baseUrlInput = document.getElementById('base-url-input')
+const baseUrlStatus = document.getElementById('base-url-status')
 
 const INSTANCE_COLORS = { admin: '#e53935', doctor: '#1e88e5', patient: '#43a047' }
 
@@ -169,9 +171,46 @@ async function refreshInstances() {
   }
 }
 
+async function loadBaseUrl() {
+  const res = await fetch('/api/base-url')
+  const json = await res.json()
+  baseUrlInput.value = json.baseUrl
+  baseUrlStatus.textContent = ''
+  baseUrlStatus.className = ''
+}
+
+async function setBaseUrl(url) {
+  baseUrlStatus.textContent = 'switching…'
+  baseUrlStatus.className = ''
+  try {
+    const res = await fetch('/api/base-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    })
+    const json = await res.json()
+    if (!json.ok) throw new Error(json.error)
+    baseUrlInput.value = json.baseUrl
+    baseUrlStatus.textContent = `now targeting ${json.baseUrl} — open browsers were closed`
+    baseUrlStatus.className = ''
+    stepResults = {}
+    await refreshInstances()
+  } catch (err) {
+    baseUrlStatus.textContent = String(err.message ?? err)
+    baseUrlStatus.className = 'err'
+  }
+}
+
+document.querySelector('[data-action="set-base-url"]').addEventListener('click', () => setBaseUrl(baseUrlInput.value))
+document.querySelector('[data-action="quick-local"]').addEventListener('click', () => setBaseUrl('http://localhost:3000'))
+baseUrlInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') setBaseUrl(baseUrlInput.value)
+})
+
 async function init() {
   const res = await fetch('/api/steps')
   steps = await res.json()
+  await loadBaseUrl()
   await refreshInstances()
   setInterval(refreshInstances, 1500) // fast enough to catch a waitingLabel promptly during step-through
 }

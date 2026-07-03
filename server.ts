@@ -21,7 +21,7 @@
 import express from 'express'
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 import { fileURLToPath } from 'node:url'
-import { buildSteps, emptyState, tagInstanceWindow, INSTANCE_IDS, type DemoState, type InstanceId } from './steps.ts'
+import { buildSteps, emptyState, tagInstanceWindow, setBaseUrl, BASE_URL, INSTANCE_IDS, type DemoState, type InstanceId } from './steps.ts'
 
 const PANEL_PORT = Number(process.env.PANEL_PORT ?? 4949)
 const PUBLIC_DIR = fileURLToPath(new URL('./public', import.meta.url))
@@ -163,6 +163,31 @@ app.post('/api/instances/:id/reset', async (req, res) => {
   }
   await ensureInstance(id)
   res.json({ ok: true })
+})
+
+app.get('/api/base-url', (_req, res) => {
+  res.json({ baseUrl: BASE_URL })
+})
+
+app.post('/api/base-url', async (req, res) => {
+  const url = req.body?.url
+  if (typeof url !== 'string' || !url.trim()) {
+    res.status(400).json({ ok: false, error: 'url is required' })
+    return
+  }
+  try {
+    setBaseUrl(url)
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message })
+    return
+  }
+  // Old sessions are logged into whatever environment was live when they opened —
+  // closing them avoids a demo where two role windows silently point at different apps.
+  for (const [id, instance] of instances) {
+    await instance.browser.close().catch(() => {})
+    instances.delete(id)
+  }
+  res.json({ ok: true, baseUrl: BASE_URL })
 })
 
 app.post('/api/steps/:id/run', async (req, res) => {

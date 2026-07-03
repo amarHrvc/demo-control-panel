@@ -9,8 +9,23 @@
 
 import type { Page } from 'playwright'
 
-export const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000'
+export let BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000'
 export const DRY_RUN = process.env.DRY_RUN === '1'
+
+/**
+ * Lets the web panel repoint the demo at a different environment (e.g. a
+ * Railway-hosted deploy) without restarting the process. steps.ts is the
+ * only writer; server.ts/demo.ts read the live BASE_URL binding via the
+ * ES module live-binding semantics, so every step call picks up the change
+ * immediately — no need to thread the URL through StepContext.
+ */
+export function setBaseUrl(url: string): void {
+  const trimmed = url.trim().replace(/\/+$/, '')
+  if (!/^https?:\/\/.+/.test(trimmed)) {
+    throw new Error('Base URL must start with http:// or https://')
+  }
+  BASE_URL = trimmed
+}
 
 export const CREDS = {
   admin: { email: 'hajrovica@gmail.com', password: 'Test12345' },

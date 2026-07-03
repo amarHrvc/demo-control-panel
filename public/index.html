@@ -22,6 +22,15 @@
   }
   header h1 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
 
+  #base-url-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #base-url-bar input {
+    background: #0f1218; border: 1px solid #3c4560; color: #e6e8eb;
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; width: 300px;
+    max-width: 45vw; font-family: inherit;
+  }
+  #base-url-status { font-size: 11px; color: #8b92a3; }
+  #base-url-status.err { color: #ff9a9a; }
+
   #teleprompter {
     background: #0f2a4a;
     border-bottom: 2px solid #2f6fbf;
@@ -94,6 +103,12 @@
 <body>
 <header>
   <h1>NutriBase Demo Control Panel</h1>
+  <div id="base-url-bar">
+    <input id="base-url-input" type="text" placeholder="http://localhost:3000" />
+    <button class="pill-btn" data-action="set-base-url">Set</button>
+    <button class="pill-btn" data-action="quick-local">Local</button>
+    <span id="base-url-status"></span>
+  </div>
 </header>
 <div id="teleprompter">
   <div class="label">Say</div>

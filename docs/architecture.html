@@ -319,6 +319,7 @@
 <span class="dim">│</span>  GET  /api/steps           list of step definitions          <span class="dim">│</span>
 <span class="dim">│</span>  GET  /api/instances       open / paused / state per role     <span class="dim">│</span>
 <span class="dim">│</span>  POST /api/instances/:id/open · pause · reset                 <span class="dim">│</span>
+<span class="dim">│</span>  GET  /api/base-url · POST /api/base-url  switch environment  <span class="dim">│</span>
 <span class="dim">│</span>  POST /api/steps/:id/run   runs one step on its instance       <span class="dim">│</span>
 <span class="dim">└──────────────┬────────────────┬────────────────┬─────────────┘</span>
                <span class="dim">│</span> owns            <span class="dim">│</span> owns            <span class="dim">│</span> owns
@@ -341,6 +342,14 @@
       backend must already be running at <code>BASE_URL</code> before you start
       the panel or the terminal script.
     </div>
+    <p>
+      <code>BASE_URL</code> is set from the env var at startup but is a
+      mutable, exported <code>let</code> in <code>steps.ts</code> — the panel's
+      header bar can repoint it at any environment at runtime (e.g. a
+      Railway-hosted deploy instead of <code>localhost:3000</code>) via
+      <code>POST /api/base-url</code>, with no server restart. See
+      <a href="#changelog-base-url"><code>§09</code></a>.
+    </p>
   </section>
 
   <section>
@@ -534,6 +543,20 @@
       one-time snapshot.
     </p>
     <div class="changelog">
+      <div class="entry" id="changelog-base-url">
+        <div class="entry-head">
+          <span class="date">2026-07-03</span>
+          <span class="title">Runtime-switchable base URL (demo against Railway, not just localhost)</span>
+        </div>
+        <dl>
+          <dt>What</dt>
+          <dd>Added a base-URL bar to the panel header (text input + <code>Set</code> + a <code>Local</code> quick preset) and <code>GET</code>/<code>POST /api/base-url</code> in <code>server.ts</code>. Switching the URL closes and clears every open role instance, since a browser already logged in against the old environment would otherwise sit there silently pointed at the wrong app.</dd>
+          <dt>Why</dt>
+          <dd>The panel could previously only target one app instance for its whole process lifetime, fixed by the <code>BASE_URL</code> env var at startup. The same NutriBase app is also hosted on Railway, and the presenter needed to demo against that hosted environment without restarting the panel process (and losing whatever instances/state were already set up) each time they switch.</dd>
+          <dt>How</dt>
+          <dd><code>steps.ts</code>: changed <code>export const BASE_URL</code> to <code>export let BASE_URL</code> and added <code>setBaseUrl(url)</code>, which trims/strips a trailing slash and rejects anything not starting with <code>http(s)://</code>. Every step still reads the module-level <code>BASE_URL</code> binding by name at call time, and ES module bindings are live, so <code>server.ts</code>/<code>demo.ts</code> pick up the change automatically — no need to thread the URL through <code>StepContext</code>. <code>server.ts</code>'s <code>POST /api/base-url</code> calls <code>setBaseUrl()</code> then closes every entry in the <code>instances</code> map. <code>public/app.js</code> loads the current value on init and posts changes on <code>Set</code>/<code>Enter</code>/<code>Local</code>.</dd>
+        </dl>
+      </div>
       <div class="entry">
         <div class="entry-head">
           <span class="date">2026-07-03</span>
