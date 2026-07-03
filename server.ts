@@ -21,7 +21,7 @@
 import express from 'express'
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 import { fileURLToPath } from 'node:url'
-import { buildSteps, emptyState, tagInstanceWindow, installVisualCues, setBaseUrl, BASE_URL, INSTANCE_IDS, type DemoState, type InstanceId } from './steps.ts'
+import { buildSteps, emptyState, tagInstanceWindow, installVisualCues, setPageCaption, setBaseUrl, BASE_URL, INSTANCE_IDS, type DemoState, type InstanceId } from './steps.ts'
 import {
   isRecordingEnabled,
   setRecordingEnabled,
@@ -289,6 +289,9 @@ app.post('/api/steps/:id/run', async (req, res) => {
   }
   try {
     const instance = await ensureInstance(step.instance)
+    // Burns the presenter's talking point into the recording itself, beside the role badge —
+    // only while actually recording, so it doesn't clutter the live (non-recorded) demo view.
+    if (instance.recording) await setPageCaption(instance.page, step.say)
     const patch = await step.run({
       page: instance.page,
       state: instance.state,

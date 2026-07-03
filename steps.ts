@@ -43,11 +43,17 @@ export const INSTANCE_COLORS: Record<InstanceId, string> = {
 }
 
 /**
- * Injects a colored frame + corner badge into every document loaded in this
- * page, so the three role windows are visually distinguishable at a glance
- * (and on recordings). Survives Next.js client-side route changes because
- * it's appended to <html> directly, outside React's root — only re-runs
- * the MutationObserver safety net if something actually removes it.
+ * Injects a colored frame + corner badge + narration caption into every
+ * document loaded in this page, so the three role windows are visually
+ * distinguishable at a glance (and on recordings), and the step's "say"
+ * line can be burned into the recording right beside the role badge.
+ * Survives Next.js client-side route changes because it's appended to
+ * <html> directly, outside React's root — only re-runs the MutationObserver
+ * safety net if something actually removes it.
+ *
+ * The caption is driven from Node via `window.__setDemoCaption(text)`,
+ * called through page.evaluate (see setPageCaption below) whenever a step
+ * with a `say` line starts — it's just an empty, hidden bubble until then.
  */
 export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<void> {
   // Passed as a raw script STRING, not a function — page.addInitScript would otherwise
@@ -65,11 +71,34 @@ export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<voi
       frame.id = '__demo_role_frame__';
       frame.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;box-shadow:inset 0 0 0 6px ' + COLOR + ';';
       document.documentElement.appendChild(frame);
+
+      var dock = document.createElement('div');
+      dock.id = '__demo_role_dock__';
+      dock.style.cssText = 'position:fixed;bottom:10px;right:10px;pointer-events:none;z-index:2147483647;display:flex;align-items:center;gap:8px;max-width:min(70vw,640px);';
+      document.documentElement.appendChild(dock);
+
+      var caption = document.createElement('div');
+      caption.id = '__demo_caption__';
+      caption.style.cssText = 'display:none;background:rgba(15,18,24,.92);color:#e6e8eb;font:500 13px/1.4 system-ui,sans-serif;padding:7px 14px;border-radius:8px;border-left:4px solid ' + COLOR + ';box-shadow:0 2px 8px rgba(0,0,0,.4);';
+      dock.appendChild(caption);
+
       var badge = document.createElement('div');
       badge.id = '__demo_role_badge__';
       badge.textContent = ROLE;
-      badge.style.cssText = 'position:fixed;bottom:10px;right:10px;pointer-events:none;z-index:2147483647;background:' + COLOR + ';color:#fff;font:700 12px system-ui,sans-serif;padding:5px 12px;border-radius:6px;letter-spacing:.06em;box-shadow:0 2px 8px rgba(0,0,0,.4);';
-      document.documentElement.appendChild(badge);
+      badge.style.cssText = 'flex:none;background:' + COLOR + ';color:#fff;font:700 12px system-ui,sans-serif;padding:5px 12px;border-radius:6px;letter-spacing:.06em;box-shadow:0 2px 8px rgba(0,0,0,.4);';
+      dock.appendChild(badge);
+
+      window.__setDemoCaption = function (text) {
+        var el = document.getElementById('__demo_caption__');
+        if (!el) return;
+        if (text) {
+          el.textContent = text;
+          el.style.display = 'block';
+        } else {
+          el.textContent = '';
+          el.style.display = 'none';
+        }
+      };
     }
     function start() {
       install();
@@ -84,6 +113,14 @@ export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<voi
     }
   })();`
   await page.addInitScript(script)
+}
+
+/** Sets (or clears, if text is falsy) the on-page narration caption installed by tagInstanceWindow. */
+export async function setPageCaption(page: Page, text: string | null | undefined): Promise<void> {
+  await page.evaluate(t => {
+    const w = window as unknown as { __setDemoCaption?: (text: string | null) => void }
+    w.__setDemoCaption?.(t ?? null)
+  }, text ?? null).catch(() => {})
 }
 
 /**
