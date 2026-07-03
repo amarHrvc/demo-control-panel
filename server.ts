@@ -220,6 +220,9 @@ app.post('/api/instances/:id/new-take', async (req, res) => {
   const newPage = await inst.context.newPage() // same context: cookies/login carry over into the new take
   await tagInstanceWindow(newPage, id)
   await installVisualCues(newPage)
+  // Land on a real start point instead of a blank tab: the dashboard if the carried-over
+  // session is still authenticated, or wherever the app's auth guard redirects otherwise (login).
+  await newPage.goto(`${BASE_URL}/dashboard/home`).catch(() => {})
   await oldPage.close() // finalizes the outgoing take's video
   await finalizeTake(oldRecording.id, oldRecording.video)
 

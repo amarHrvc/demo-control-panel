@@ -74,12 +74,12 @@ export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<voi
 
       var dock = document.createElement('div');
       dock.id = '__demo_role_dock__';
-      dock.style.cssText = 'position:fixed;bottom:10px;right:10px;pointer-events:none;z-index:2147483647;display:flex;align-items:center;gap:8px;max-width:min(70vw,640px);';
+      dock.style.cssText = 'position:fixed;left:0;right:0;bottom:10px;padding:0 16px;pointer-events:none;z-index:2147483647;display:flex;align-items:flex-end;gap:12px;';
       document.documentElement.appendChild(dock);
 
       var caption = document.createElement('div');
       caption.id = '__demo_caption__';
-      caption.style.cssText = 'display:none;background:rgba(15,18,24,.92);color:#e6e8eb;font:500 13px/1.4 system-ui,sans-serif;padding:7px 14px;border-radius:8px;border-left:4px solid ' + COLOR + ';box-shadow:0 2px 8px rgba(0,0,0,.4);';
+      caption.style.cssText = 'display:none;flex:1 1 auto;min-width:0;background:rgba(15,18,24,.92);color:#f2f4f8;font:600 19px/1.45 system-ui,sans-serif;padding:12px 20px;border-radius:8px;border-left:5px solid ' + COLOR + ';box-shadow:0 2px 10px rgba(0,0,0,.45);';
       dock.appendChild(caption);
 
       var badge = document.createElement('div');
