@@ -21,7 +21,7 @@
 import express from 'express'
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 import { fileURLToPath } from 'node:url'
-import { buildSteps, emptyState, tagInstanceWindow, setBaseUrl, BASE_URL, INSTANCE_IDS, type DemoState, type InstanceId } from './steps.ts'
+import { buildSteps, emptyState, tagInstanceWindow, installVisualCues, setBaseUrl, BASE_URL, INSTANCE_IDS, type DemoState, type InstanceId } from './steps.ts'
 import {
   isRecordingEnabled,
   setRecordingEnabled,
@@ -35,6 +35,13 @@ import {
 
 const PANEL_PORT = Number(process.env.PANEL_PORT ?? 4949)
 const PUBLIC_DIR = fileURLToPath(new URL('./public', import.meta.url))
+
+/**
+ * Playwright only accepts slowMo at browser-launch time, so — like recording —
+ * changing this only takes effect for instances opened (or reset) afterward;
+ * it can't retroactively slow down an already-open instance.
+ */
+let slowMoMs = Number(process.env.SLOWMO ?? 150)
 
 const app = express()
 app.use(express.static(PUBLIC_DIR))
@@ -75,7 +82,7 @@ async function ensureInstance(id: InstanceId): Promise<Instance> {
   const existing = instances.get(id)
   if (existing && !existing.page.isClosed()) return existing
 
-  const browser = await chromium.launch({ headless: false, slowMo: 150, args: ['--start-maximized'] })
+  const browser = await chromium.launch({ headless: false, slowMo: slowMoMs, args: ['--start-maximized'] })
   const recordThisInstance = isRecordingEnabled()
   const context = await browser.newContext({
     viewport: null,
@@ -83,6 +90,7 @@ async function ensureInstance(id: InstanceId): Promise<Instance> {
   })
   const page = await context.newPage()
   await tagInstanceWindow(page, id)
+  await installVisualCues(page)
   const instance: Instance = {
     browser,
     context,
@@ -211,6 +219,7 @@ app.post('/api/instances/:id/new-take', async (req, res) => {
   const oldRecording = inst.recording
   const newPage = await inst.context.newPage() // same context: cookies/login carry over into the new take
   await tagInstanceWindow(newPage, id)
+  await installVisualCues(newPage)
   await oldPage.close() // finalizes the outgoing take's video
   await finalizeTake(oldRecording.id, oldRecording.video)
 
@@ -231,6 +240,20 @@ app.post('/api/recording', (req, res) => {
   }
   setRecordingEnabled(enabled)
   res.json({ ok: true, enabled: isRecordingEnabled() })
+})
+
+app.get('/api/slowmo', (_req, res) => {
+  res.json({ slowMo: slowMoMs })
+})
+
+app.post('/api/slowmo', (req, res) => {
+  const ms = req.body?.slowMo
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) {
+    res.status(400).json({ ok: false, error: 'slowMo (non-negative number) is required' })
+    return
+  }
+  slowMoMs = Math.round(ms)
+  res.json({ ok: true, slowMo: slowMoMs })
 })
 
 app.get('/api/base-url', (_req, res) => {

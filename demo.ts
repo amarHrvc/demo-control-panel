@@ -20,7 +20,7 @@
 
 import { chromium, type Browser, type Page } from 'playwright'
 import { createInterface } from 'node:readline/promises'
-import { buildSteps, emptyState, tagInstanceWindow, type DemoState, type InstanceId } from './steps.ts'
+import { buildSteps, emptyState, tagInstanceWindow, installVisualCues, type DemoState, type InstanceId } from './steps.ts'
 
 const rl = createInterface({ input: process.stdin, output: process.stdout })
 
@@ -34,6 +34,7 @@ async function main() {
       const context = await browser.newContext({ viewport: null })
       const page = await context.newPage()
       await tagInstanceWindow(page, id)
+      await installVisualCues(page)
       inst = { browser, page, state: emptyState() }
       browsers.set(id, inst)
     }

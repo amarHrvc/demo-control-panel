@@ -86,6 +86,76 @@ export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<voi
   await page.addInitScript(script)
 }
 
+/**
+ * Injects a fake cursor + element-highlight overlay into every document
+ * loaded in this page. Playwright drives clicks/fills via CDP rather than a
+ * real OS cursor, so nothing is visible on screen for an action by default —
+ * this layer makes the target of each action visible on the recording/panel
+ * by riding real DOM events the actions already trigger:
+ *  - 'mousemove' (Playwright dispatches a real one as part of every click)
+ *    moves a fixed-position cursor glyph to the pointer's last position.
+ *  - 'click' and 'focusin' (covers fills, which focus their input before
+ *    typing) flash a highlight ring around whatever element fired them.
+ * Pure page-side DOM listening — no dependency on Playwright's internals —
+ * so it works uniformly for every action type without touching step code.
+ */
+export async function installVisualCues(page: Page): Promise<void> {
+  const script = `(function () {
+    function install() {
+      if (document.getElementById('__demo_cursor__')) return;
+      var cursor = document.createElement('div');
+      cursor.id = '__demo_cursor__';
+      cursor.style.cssText = 'position:fixed;top:0;left:0;width:18px;height:18px;'
+        + 'border-radius:50% 50% 50% 0;background:rgba(255,205,0,.95);border:2px solid #7a5a00;'
+        + 'transform:translate(-4px,-4px) rotate(45deg);pointer-events:none;z-index:2147483647;'
+        + 'display:none;transition:top .12s ease-out,left .12s ease-out;box-shadow:0 0 6px rgba(0,0,0,.5);';
+      document.documentElement.appendChild(cursor);
+
+      document.addEventListener('mousemove', function (e) {
+        cursor.style.display = 'block';
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+      }, true);
+
+      var ring = null;
+      function highlight(el) {
+        if (!el || !el.getBoundingClientRect) return;
+        var rect = el.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return;
+        if (!ring) {
+          ring = document.createElement('div');
+          ring.id = '__demo_highlight__';
+          ring.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483646;'
+            + 'border:3px solid #ffcf00;border-radius:6px;box-shadow:0 0 0 4px rgba(255,207,0,.35);'
+            + 'transition:opacity .15s ease-out;opacity:0;';
+          document.documentElement.appendChild(ring);
+        }
+        ring.style.left = (rect.left - 4) + 'px';
+        ring.style.top = (rect.top - 4) + 'px';
+        ring.style.width = (rect.width + 8) + 'px';
+        ring.style.height = (rect.height + 8) + 'px';
+        ring.style.opacity = '1';
+        clearTimeout(ring._hideTimer);
+        ring._hideTimer = setTimeout(function () { ring.style.opacity = '0'; }, 500);
+      }
+      document.addEventListener('click', function (e) { highlight(e.target); }, true);
+      document.addEventListener('focusin', function (e) { highlight(e.target); }, true);
+    }
+    function start() {
+      install();
+      new MutationObserver(function () {
+        if (!document.getElementById('__demo_cursor__')) install();
+      }).observe(document.documentElement, { childList: true });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', start);
+    } else {
+      start();
+    }
+  })();`
+  await page.addInitScript(script)
+}
+
 export interface DemoState {
   fatimaUrl: string
   stefanUrl: string

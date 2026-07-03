@@ -5,6 +5,8 @@ const baseUrlInput = document.getElementById('base-url-input')
 const baseUrlStatus = document.getElementById('base-url-status')
 const recordingToggleBtn = document.querySelector('[data-action="toggle-recording"]')
 const recordingStatusEl = document.getElementById('recording-status')
+const slowMoInput = document.getElementById('slowmo-input')
+const slowMoStatus = document.getElementById('slowmo-status')
 
 const INSTANCE_COLORS = { admin: '#e53935', doctor: '#1e88e5', patient: '#43a047' }
 
@@ -280,6 +282,42 @@ async function setBaseUrl(url) {
   }
 }
 
+async function loadSlowMo() {
+  const res = await fetch('/api/slowmo')
+  const json = await res.json()
+  slowMoInput.value = json.slowMo
+  slowMoStatus.textContent = ''
+  slowMoStatus.className = ''
+}
+
+async function setSlowMo(ms) {
+  const value = Number(ms)
+  if (!Number.isFinite(value) || value < 0) {
+    slowMoStatus.textContent = 'enter a non-negative number'
+    slowMoStatus.className = 'err'
+    return
+  }
+  const res = await fetch('/api/slowmo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slowMo: value })
+  })
+  const json = await res.json()
+  if (!json.ok) {
+    slowMoStatus.textContent = json.error
+    slowMoStatus.className = 'err'
+    return
+  }
+  slowMoInput.value = json.slowMo
+  slowMoStatus.textContent = 'applies to instances opened/reset from now on'
+  slowMoStatus.className = ''
+}
+
+document.querySelector('[data-action="set-slowmo"]').addEventListener('click', () => setSlowMo(slowMoInput.value))
+slowMoInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') setSlowMo(slowMoInput.value)
+})
+
 document.querySelector('[data-action="set-base-url"]').addEventListener('click', () => setBaseUrl(baseUrlInput.value))
 document.querySelector('[data-action="quick-local"]').addEventListener('click', () => setBaseUrl('http://localhost:3000'))
 baseUrlInput.addEventListener('keydown', e => {
@@ -304,6 +342,7 @@ async function init() {
   const res = await fetch('/api/steps')
   steps = await res.json()
   await loadBaseUrl()
+  await loadSlowMo()
   await refreshInstances()
   await refreshRecordings()
   setInterval(refreshInstances, 1500) // fast enough to catch a waitingLabel promptly during step-through

@@ -110,6 +110,14 @@
   #recording-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
   #recording-status { font-size: 11px; color: #8b92a3; }
 
+  #slowmo-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  #slowmo-bar label { font-size: 12px; color: #8b92a3; }
+  #slowmo-bar input {
+    background: #0f1218; border: 1px solid #3c4560; color: #e6e8eb;
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; width: 90px; font-family: inherit;
+  }
+  #slowmo-status { font-size: 11px; color: #8b92a3; }
+
   #recordings-section { margin-top: 30px; }
   #recordings-section h2 { font-size: 14px; margin: 0 0 10px; color: #8b92a3; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
   .take-row {
@@ -132,6 +140,12 @@
   <div id="recording-bar">
     <button class="pill-btn" data-action="toggle-recording">Recording: …</button>
     <span id="recording-status"></span>
+  </div>
+  <div id="slowmo-bar">
+    <label for="slowmo-input">SlowMo (ms)</label>
+    <input id="slowmo-input" type="number" min="0" step="10" />
+    <button class="pill-btn" data-action="set-slowmo">Set</button>
+    <span id="slowmo-status"></span>
   </div>
 </header>
 <div id="teleprompter">
