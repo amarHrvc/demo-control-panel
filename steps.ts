@@ -38,8 +38,25 @@ function requireEnv(name: string): string {
 
 export const CREDS = {
   admin: { email: requireEnv('ADMIN_EMAIL'), password: requireEnv('ADMIN_PASSWORD') },
-  doctor: { email: requireEnv('DOCTOR_EMAIL'), password: requireEnv('DOCTOR_PASSWORD') },
-  patient: { email: requireEnv('PATIENT_EMAIL'), password: requireEnv('PATIENT_PASSWORD') }
+  doctor: { email: requireEnv('DOCTOR_EMAIL'), password: requireEnv('DOCTOR_PASSWORD') }
+}
+
+/**
+ * The demo creates this patient live (Doctor — Add New Patient step) and logs in as them
+ * later in the Patient segment — not a pre-seeded fixture, so unlike CREDS above it's a
+ * plain constant rather than an env var. Fatima is no longer usable for the closing
+ * Patient-view segment because she gets suspended earlier in the same run (Admin segment).
+ */
+export const NEW_PATIENT = {
+  fullName: 'Test Patient',
+  email: 'amar.hajrovic@stu.ibu.edu.ba',
+  password: 'password',
+  firstName: 'Test',
+  lastName: 'Patient',
+  dateOfBirth: '2001-05-14',
+  phone: '+38762000000',
+  emergencyContactName: 'Emergency Contact',
+  emergencyContactPhone: '+38762000001'
 }
 
 export type InstanceId = 'admin' | 'doctor' | 'patient'
@@ -203,12 +220,12 @@ export async function installVisualCues(page: Page): Promise<void> {
 }
 
 export interface DemoState {
-  fatimaUrl: string
+  testPatientUrl: string
   stefanUrl: string
 }
 
 export function emptyState(): DemoState {
-  return { fatimaUrl: '', stefanUrl: '' }
+  return { testPatientUrl: '', stefanUrl: '' }
 }
 
 export interface StepContext {
@@ -254,6 +271,38 @@ function requireUrl(url: string, label: string): string {
   return url
 }
 
+/** One create-visit-then-record-vitals encounter, reused for each of the new patient's 4 visits. */
+async function addVisitWithVitals(
+  page: Page,
+  act: StepContext['act'],
+  datetime: string,
+  notes: string,
+  vitals: { weight: string; height: string; systolic: string; diastolic: string; heartRate: string; temperature: string }
+) {
+  await act('Open Add Visit dialog', () => page.getByRole('button', { name: 'Add Visit' }).click())
+  const dialog = page.getByRole('dialog')
+  await act('Fill visit date', () => dialog.getByLabel('Date & Time').fill(datetime))
+  await act('Fill visit notes', () => dialog.getByLabel('Notes').fill(notes))
+  await act('Create visit', () => dialog.getByRole('button', { name: 'Create Visit' }).click())
+
+  await act('Open new visit', async () => {
+    await page.getByRole('link', { name: 'View' }).first().click() // just-created visit sorts to the top
+    await page.waitForURL('**/dashboard/visits/**')
+  })
+
+  await act('Open vitals dialog', () => page.getByRole('button', { name: 'Record vital signs' }).click())
+  const vDialog = page.getByRole('dialog')
+  await act('Fill vitals', async () => {
+    await vDialog.getByLabel('Weight (kg)').fill(vitals.weight)
+    await vDialog.getByLabel('Height (cm)').fill(vitals.height)
+    await vDialog.getByLabel('Systolic BP (mmHg)').fill(vitals.systolic)
+    await vDialog.getByLabel('Diastolic BP (mmHg)').fill(vitals.diastolic)
+    await vDialog.getByLabel('Heart Rate (bpm)').fill(vitals.heartRate)
+    await vDialog.getByLabel('Temperature (°C)').fill(vitals.temperature)
+  })
+  await act('Record vitals', () => vDialog.getByRole('button', { name: 'Record' }).click())
+}
+
 export function buildSteps(): StepDef[] {
   return [
     // ── ADMIN instance ────────────────────────────────────────────────
@@ -275,29 +324,37 @@ export function buildSteps(): StepDef[] {
       run: async () => {}
     },
     {
-      id: 'user-management',
+      id: 'admin-user-list',
       instance: 'admin',
       segment: 'SEGMENT 1 · Admin',
-      title: 'Step 3 — User Management',
-      say: 'Only admins can create accounts and assign roles. If I assign a wrong role or a duplicate email, the form returns inline validation errors.',
+      title: 'Step 3 — User List',
+      say: 'Admin accounts, doctors, and patients are all rows in the same Users table, distinguished only by role.',
       requires: 'Logged in as Admin (Step 1).',
       run: async ({ page, act }) => {
         await act('Open Manage Users', async () => {
           await page.getByRole('link', { name: /Manage Users/ }).click()
           await page.waitForURL('**/dashboard/users')
         })
-
         const search = page.getByPlaceholder('Search by name or email')
         await act('Search for "amina"', () => search.fill('amina'))
         await act('Clear search', async () => {
           await page.waitForTimeout(600)
           await search.fill('')
         })
-
+      }
+    },
+    {
+      id: 'admin-add-user-duplicate',
+      instance: 'admin',
+      segment: 'SEGMENT 1 · Admin',
+      title: 'Step 4 — Add User with a duplicate email → validation error',
+      say: "Email uniqueness is enforced server-side, not just in the UI. Reusing the doctor's email surfaces Laravel's validation error right under the field.",
+      requires: 'On the Users list (Step 3).',
+      run: async ({ page, act }) => {
         await act('Open Add New User dialog', () => page.getByRole('button', { name: 'Add New User' }).click())
         const dialog = page.getByRole('dialog')
         await act('Fill Name', () => dialog.getByLabel('Name').fill('Dr. Haris Mujanović'))
-        await act('Fill Email', () => dialog.getByLabel('Email').fill('haris.mujanovic@nutribase.test'))
+        await act('Fill Email (already taken)', () => dialog.getByLabel('Email').fill(CREDS.doctor.email))
 
         await act('Open Role dropdown', async () => {
           await dialog.getByLabel('Role').click()
@@ -305,8 +362,35 @@ export function buildSteps(): StepDef[] {
         })
         await act('Select Doktor role', () => page.getByRole('option', { name: 'Doktor', exact: true }).click())
         await act('Fill password', () => dialog.getByLabel('Password', { exact: true }).fill('password'))
+        await act('Fill confirm password', () => dialog.getByLabel('Confirm Password').fill('password'))
 
+        await act('Submit — expect duplicate-email error', async () => {
+          await dialog.getByRole('button', { name: 'Create User' }).click()
+          await dialog.getByText(/already been taken/i).waitFor({ timeout: 10_000 }).catch(() => {})
+        })
         await act('Cancel dialog', () => dialog.getByRole('button', { name: 'Cancel' }).click())
+      }
+    },
+    {
+      id: 'admin-suspend-patient',
+      instance: 'admin',
+      segment: 'SEGMENT 1 · Admin',
+      title: 'Step 5 — Suspend Patient (Fatima Hadžić)',
+      say: 'Suspending a patient is a soft delete — the record and her history survive, but she drops out of every default patient list immediately.',
+      requires: 'Logged in as Admin (Step 1).',
+      run: async ({ page, act }) => {
+        await act('Open patient list', () => page.goto(`${BASE_URL}/dashboard/patients`))
+        await act('Search for "fat"', () => page.getByPlaceholder('Search by name, phone or other').fill('fat'))
+        await act('Open Fatima’s profile', async () => {
+          await page.getByRole('row', { name: /Fatima/ }).click()
+          await page.waitForURL('**/dashboard/patients/**')
+        })
+        await act('Click Suspend', () => page.getByRole('button', { name: 'Suspend' }).click())
+        await act('Confirm suspension', async () => {
+          const confirmDialog = page.getByRole('dialog').filter({ hasText: 'Suspend Patient' })
+          await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
+          await page.waitForURL('**/dashboard/patients')
+        })
       }
     },
 
@@ -315,84 +399,151 @@ export function buildSteps(): StepDef[] {
       id: 'login-doctor',
       instance: 'doctor',
       segment: 'SEGMENT 2 · Doctor',
-      title: 'Step 4 — Login as Doctor',
+      title: 'Step 6 — Login as Doctor',
       say: 'Doctors land on a different dashboard — they see their own visit schedule, not a system-wide user count.',
       run: async ({ page, act }) => act('Log in as Doctor', () => login(page, CREDS.doctor.email, CREDS.doctor.password))
     },
     {
-      id: 'patient-list',
+      id: 'doctor-patient-list-no-fatima',
       instance: 'doctor',
       segment: 'SEGMENT 2 · Doctor',
-      title: 'Step 5 — Patient List → Fatima Hadžić',
-      requires: 'Logged in as Doctor (Step 4).',
+      title: 'Step 7 — Patient List (Fatima no longer listed)',
+      say: 'Fatima was suspended from the Admin side moments ago — the same list a doctor uses now returns nothing for her.',
+      requires: 'Logged in as Doctor (Step 6).',
       run: async ({ page, act }) => {
         await act('Open patient list', () => page.goto(`${BASE_URL}/dashboard/patients`))
-        await act('Search for "fat"', () => page.getByPlaceholder('Search by name, phone or other').fill('fat'))
-        await act('Open Fatima’s profile', async () => {
-          await page.getByRole('row', { name: /Fatima/ }).click()
-          await page.waitForURL('**/dashboard/patients/**')
-        })
-        return { fatimaUrl: page.url() }
+        await act('Search for "fat" — expect no rows', () => page.getByPlaceholder('Search by name, phone or other').fill('fat'))
       }
     },
     {
-      id: 'fatima-profile',
+      id: 'doctor-add-new-patient',
       instance: 'doctor',
       segment: 'SEGMENT 2 · Doctor',
-      title: 'Step 6 — Fatima Hadžić — Full Profile',
-      say: "Fatima is a 53-year-old teacher from Mostar, referred for Type 2 diabetes management and weight loss. Social determinants matter in nutrition — knowing she has insurance, stable food access, and family support directly shapes the dietary plan we'd recommend.",
-      requires: "Run 'Patient List → Fatima Hadžić' first to be on her profile page.",
+      title: 'Step 8 — Add New Patient',
+      say: "Doctors can onboard patients directly, not just admins. Creating a patient here also creates their login account — this is the account we'll log into later as the Patient role.",
+      requires: 'On the Patients list (Step 7).',
       run: async ({ page, act }) => {
-        await act('Open Medical tab', async () => {
-          await page.getByRole('tab', { name: 'Medical' }).click()
-          await page.waitForTimeout(800)
+        await act('Clear search', () => page.getByPlaceholder('Search by name, phone or other').fill(''))
+        await act('Open Add New Patient dialog', () => page.getByRole('button', { name: 'Add New Patient' }).click())
+        const dialog = page.getByRole('dialog')
+
+        await act('Fill Full Name', () => dialog.getByLabel('Full Name').fill(NEW_PATIENT.fullName))
+        await act('Fill Email', () => dialog.getByLabel('Email').fill(NEW_PATIENT.email))
+        await act('Fill Password', () => dialog.getByLabel('Password', { exact: true }).fill(NEW_PATIENT.password))
+        await act('Fill Confirm Password', () => dialog.getByLabel('Confirm Password').fill(NEW_PATIENT.password))
+
+        await act('Fill First Name', () => dialog.getByLabel('First Name').fill(NEW_PATIENT.firstName))
+        await act('Fill Last Name', () => dialog.getByLabel('Last Name').fill(NEW_PATIENT.lastName))
+        await act('Fill Date of Birth', () => dialog.getByLabel('Date of Birth').fill(NEW_PATIENT.dateOfBirth))
+        await act('Open Gender dropdown', async () => {
+          await dialog.getByLabel('Gender').click()
+          await page.getByRole('listbox').waitFor({ state: 'visible' })
         })
-        await act('Open Socioeconomic tab', () => page.getByRole('tab', { name: 'Socioeconomic' }).click())
+        await act('Select Male', () => page.getByRole('option', { name: 'Male', exact: true }).click())
+        await act('Fill Phone', () => dialog.getByLabel('Phone').fill(NEW_PATIENT.phone))
+        await act('Fill Emergency Contact Name', () => dialog.getByLabel('Emergency Contact Name').fill(NEW_PATIENT.emergencyContactName))
+        await act('Fill Emergency Contact Phone', () => dialog.getByLabel('Emergency Contact Phone').fill(NEW_PATIENT.emergencyContactPhone))
+
+        await act('Create patient', () => dialog.getByRole('button', { name: 'Create Patient' }).click())
+
+        const testPatientUrl = await act('Open new patient’s profile', async () => {
+          await page.getByPlaceholder('Search by name, phone or other').fill('Test Patient')
+          await page.getByRole('row', { name: /Test Patient/ }).click()
+          await page.waitForURL('**/dashboard/patients/**')
+          return page.url()
+        })
+        return { testPatientUrl }
       }
     },
     {
-      id: 'fatima-oldest-visit',
+      id: 'new-patient-visit-1',
       instance: 'doctor',
-      segment: 'SEGMENT 2 · Doctor',
-      title: 'Step 7 — Fatima Oldest Visit (intake, red flags)',
-      say: 'Fatima has 5 visits over 10 weeks. At intake — high blood pressure, obese BMI. The system automatically evaluates each measurement against clinical reference ranges and flags anything outside bounds.',
-      requires: "Needs Fatima's profile open (run 'Patient List → Fatima Hadžić' first).",
+      segment: 'SEGMENT 3 · Doctor',
+      title: 'Step 9 — Visit 1 (Intake — Obese, hypertensive)',
+      say: 'Intake: BMI in the obese range and blood pressure above threshold — both auto-flagged the moment vitals are recorded.',
+      requires: "Needs the new patient's profile open (Step 8).",
       run: async ({ page, state, act }) => {
-        await act('Open Fatima’s profile', () => page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL")))
+        await act('Open patient profile', () => page.goto(requireUrl(state.testPatientUrl, "New patient's profile URL")))
         await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
-        await act('Open oldest visit', async () => {
-          await page.getByRole('link', { name: 'View' }).last().click() // date-desc list, last row = oldest
-          await page.waitForURL('**/dashboard/visits/**')
-        })
+        await addVisitWithVitals(
+          page,
+          act,
+          '2026-04-06T09:00',
+          'Intake visit. Referred for weight management and hypertension screening.',
+          { weight: '90', height: '165', systolic: '148', diastolic: '95', heartRate: '88', temperature: '36.7' }
+        )
       }
     },
     {
-      id: 'fatima-latest-visit',
+      id: 'new-patient-visit-2',
       instance: 'doctor',
-      segment: 'SEGMENT 2 · Doctor',
-      title: 'Step 7b — Fatima Most Recent Visit (improvement)',
-      say: 'Eight weeks later — blood pressure normalised, 7.6 kg lost, HbA1c improving. Point to the Weight & BMI Trend chart on the patient profile page.',
-      requires: "Needs Fatima's profile open (run 'Patient List → Fatima Hadžić' first).",
+      segment: 'SEGMENT 3 · Doctor',
+      title: 'Step 10 — Visit 2 (4 weeks — trending down)',
+      say: 'Four weeks in — weight and blood pressure both moving in the right direction, though still above normal range.',
+      requires: "Needs the new patient's profile open (Step 8).",
       run: async ({ page, state, act }) => {
-        await act('Open Fatima’s profile', () => page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL")))
+        await act('Open patient profile', () => page.goto(requireUrl(state.testPatientUrl, "New patient's profile URL")))
         await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
-        await act('Open most recent visit', async () => {
-          await page.getByRole('link', { name: 'View' }).first().click() // first row = most recent
-          await page.waitForURL('**/dashboard/visits/**')
-        })
+        await addVisitWithVitals(
+          page,
+          act,
+          '2026-05-04T09:00',
+          'Four-week follow-up. Adhering to dietary plan, moderate exercise introduced.',
+          { weight: '82', height: '165', systolic: '138', diastolic: '89', heartRate: '82', temperature: '36.6' }
+        )
       }
     },
     {
-      id: 'diet-plan',
+      id: 'new-patient-visit-3',
       instance: 'doctor',
-      segment: 'SEGMENT 2 · Doctor',
-      title: 'Step 8 — AI Diet Plan',
-      say: 'The system accepts the request immediately with HTTP 202 and queues the generation. The AI proposes — the clinician decides.',
-      requires: "Needs Fatima's profile open. Costs a real OpenAI call unless DRY_RUN=1.",
+      segment: 'SEGMENT 3 · Doctor',
+      title: 'Step 11 — Visit 3 (8 weeks — overweight)',
+      say: 'BMI has crossed out of the obese band into overweight — watch the badge on the patient card change accordingly.',
+      requires: "Needs the new patient's profile open (Step 8).",
       run: async ({ page, state, act }) => {
-        await act('Open Fatima’s profile', () => page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL")))
+        await act('Open patient profile', () => page.goto(requireUrl(state.testPatientUrl, "New patient's profile URL")))
+        await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
+        await addVisitWithVitals(
+          page,
+          act,
+          '2026-06-01T09:00',
+          'Eight-week follow-up. Continued weight loss, blood pressure nearing normal range.',
+          { weight: '73', height: '165', systolic: '128', diastolic: '82', heartRate: '76', temperature: '36.6' }
+        )
+      }
+    },
+    {
+      id: 'new-patient-visit-4',
+      instance: 'doctor',
+      segment: 'SEGMENT 3 · Doctor',
+      title: 'Step 12 — Visit 4 (12 weeks — normal range)',
+      say: 'All vitals now in normal range — the BMI badge disappears entirely, and the Weight & BMI Trend chart shows the full arc from intake to here.',
+      requires: "Needs the new patient's profile open (Step 8).",
+      run: async ({ page, state, act }) => {
+        await act('Open patient profile', () => page.goto(requireUrl(state.testPatientUrl, "New patient's profile URL")))
+        await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
+        await addVisitWithVitals(
+          page,
+          act,
+          '2026-06-29T09:00',
+          'Twelve-week follow-up. Weight, blood pressure, and heart rate all within normal reference ranges. Transitioning to routine maintenance follow-ups.',
+          { weight: '60', height: '165', systolic: '118', diastolic: '76', heartRate: '70', temperature: '36.6' }
+        )
+        await act('Open Vitals tab', () => page.getByRole('tab', { name: 'Vitals', exact: true }).click())
+      }
+    },
+    {
+      id: 'new-patient-diet-plan-generate-edit',
+      instance: 'doctor',
+      segment: 'SEGMENT 4 · Doctor',
+      title: 'Step 13 — Generate & Edit AI Diet Plan',
+      say: 'The AI proposes a plan from the recorded history — the clinician can then hand-edit any part of it before it ever reaches the patient.',
+      requires: "Needs the new patient's profile open. Costs a real OpenAI call unless DRY_RUN=1.",
+      run: async ({ page, state, act }) => {
+        await act('Open patient profile', () => page.goto(requireUrl(state.testPatientUrl, "New patient's profile URL")))
         await act('Open Diet Plans tab', () => page.getByRole('tab', { name: 'Diet Plans' }).click())
         if (DRY_RUN) return
+
         await act('Generate diet plan', async () => {
           await page.getByRole('button', { name: 'Generate Diet Plan' }).click()
           await page
@@ -400,57 +551,36 @@ export function buildSteps(): StepDef[] {
             .waitFor({ timeout: 60_000 })
             .catch(() => {})
         })
+        await act('Open Edit Plan', () => page.getByRole('button', { name: 'Edit Plan' }).click())
+        await act('Edit rationale', () =>
+          page
+            .getByLabel('Rationale')
+            .fill('Adjusted by Dr. — reduced daily calories slightly given the patient’s now-normal BMI and activity level.')
+        )
+        await act('Save changes', () => page.getByRole('button', { name: 'Save Changes' }).click())
       }
     },
     {
-      id: 'create-visit-vitals',
+      id: 'new-patient-diet-plan-send',
       instance: 'doctor',
-      segment: 'SEGMENT 3 · Doctor',
-      title: 'Create Visit + Vitals Live',
-      say: "That is the full create flow — a new clinical encounter documented and immediately part of Fatima's longitudinal record. BMI is auto-computed and no flags fire — all values in normal range.",
-      requires: "Needs Fatima's profile open. Mutates real data unless DRY_RUN=1.",
+      segment: 'SEGMENT 4 · Doctor',
+      title: 'Step 14 — Send Diet Plan to Patient',
+      say: 'Sending queues delivery to the patient — this is the moment the clinician-reviewed plan actually becomes visible on the patient side.',
+      requires: "Needs the new patient's profile open, on the Diet Plans tab with a generated plan (Step 13). Skipped under DRY_RUN.",
       run: async ({ page, state, act }) => {
-        await act('Open Fatima’s profile', () => page.goto(requireUrl(state.fatimaUrl, "Fatima's profile URL")))
-        await act('Open Visits tab', () => page.getByRole('tab', { name: 'Visits' }).click())
+        await act('Open patient profile', () => page.goto(requireUrl(state.testPatientUrl, "New patient's profile URL")))
+        await act('Open Diet Plans tab', () => page.getByRole('tab', { name: 'Diet Plans' }).click())
         if (DRY_RUN) return
-
-        await act('Open Add Visit dialog', () => page.getByRole('button', { name: 'Add Visit' }).click())
-        const dialog = page.getByRole('dialog')
-        await act('Fill visit date', () => dialog.getByLabel('Date & Time').fill('2026-06-30T09:00'))
-        await act('Fill visit notes', () =>
-          dialog
-            .getByLabel('Notes')
-            .fill(
-              'Ten-week programme review. Total weight loss 7.6 kg achieved and maintained. BP 132/83, now within normal range. HbA1c improved to 7.4%. Patient managing dietary plan independently. Transitioning to monthly follow-ups.'
-            )
-        )
-        await act('Create visit', () => dialog.getByRole('button', { name: 'Create Visit' }).click())
-
-        await act('Open new visit', async () => {
-          await page.getByRole('link', { name: 'View' }).first().click()
-          await page.waitForURL('**/dashboard/visits/**')
-        })
-
-        await act('Open vitals dialog', () => page.getByRole('button', { name: 'Record vital signs' }).click())
-        const vDialog = page.getByRole('dialog')
-        await act('Fill vitals', async () => {
-          await vDialog.getByLabel('Weight (kg)').fill('81.2')
-          await vDialog.getByLabel('Height (cm)').fill('162')
-          await vDialog.getByLabel('Systolic BP (mmHg)').fill('132')
-          await vDialog.getByLabel('Diastolic BP (mmHg)').fill('83')
-          await vDialog.getByLabel('Heart Rate (bpm)').fill('80')
-          await vDialog.getByLabel('Temperature (°C)').fill('36.6')
-        })
-        await act('Record vitals', () => vDialog.getByRole('button', { name: 'Record' }).click())
+        await act('Send to Patient', () => page.getByRole('button', { name: 'Send to Patient' }).click())
       }
     },
     {
       id: 'stefan-intake',
       instance: 'doctor',
-      segment: 'SEGMENT 4 · Doctor',
+      segment: 'SEGMENT 5 · Doctor',
       title: 'Stefan Jovanović — Intake Flags',
       say: 'Stefan is a 31-year-old student in an anorexia nervosa recovery programme — the opposite clinical picture. Every measurement flagged at intake.',
-      requires: 'Logged in as Doctor (Step 4).',
+      requires: 'Logged in as Doctor (Step 6).',
       run: async ({ page, act }) => {
         await act('Open patient list', () => page.goto(`${BASE_URL}/dashboard/patients`))
         await act('Search for Stefan', () => page.getByPlaceholder('Search by name, phone or other').fill('Stefan'))
@@ -468,7 +598,7 @@ export function buildSteps(): StepDef[] {
     {
       id: 'stefan-recovery',
       instance: 'doctor',
-      segment: 'SEGMENT 4 · Doctor',
+      segment: 'SEGMENT 5 · Doctor',
       title: 'Stefan Most Recent Visit (recovery)',
       say: 'Seven visits, 14 weeks, 7.7 kg gained. The trend chart tells the full recovery story — including the relapse at week 8 when academic stress triggered restriction episodes.',
       requires: "Needs Stefan's profile open (run 'Stefan Jovanović — Intake Flags' first).",
@@ -483,15 +613,15 @@ export function buildSteps(): StepDef[] {
     {
       id: 'login-patient',
       instance: 'patient',
-      segment: 'SEGMENT 5 · Patient',
+      segment: 'SEGMENT 6 · Patient',
       title: 'Login as Patient',
-      say: 'Patients log in and see exactly one record — their own. No dashboard, no user list.',
-      run: async ({ page, act }) => act('Log in as Patient', () => login(page, CREDS.patient.email, CREDS.patient.password))
+      say: "Logging in as the patient we just created moments ago in the Doctor segment — patients see exactly one record, their own. No dashboard, no user list.",
+      run: async ({ page, act }) => act('Log in as Patient', () => login(page, NEW_PATIENT.email, NEW_PATIENT.password))
     },
     {
       id: 'patient-restricted',
       instance: 'patient',
-      segment: 'SEGMENT 5 · Patient',
+      segment: 'SEGMENT 6 · Patient',
       title: 'Patient tries the Patients list — role enforcement',
       say: "They cannot navigate to any other patient's data. Role enforcement is not just a UI decision — the API returns 403 for any out-of-scope request, regardless of what the frontend shows.",
       requires: "Logged in as Patient ('Login as Patient' step).",
