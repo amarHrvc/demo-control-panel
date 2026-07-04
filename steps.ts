@@ -7,7 +7,7 @@
  * separate persistent browser, since each role needs its own login session.
  */
 
-import type { Page } from 'playwright'
+import type { Locator, Page } from 'playwright'
 
 export let BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000'
 export const DRY_RUN = process.env.DRY_RUN === '1'
@@ -271,6 +271,20 @@ function requireUrl(url: string, label: string): string {
   return url
 }
 
+/**
+ * Opens and picks an option from a MUI Select composed manually via
+ * FormControl+InputLabel+Select (Role in UserForm, Gender in PatientForm) — verified live
+ * against the real app that these don't wire labelId/aria-labelledby, so getByLabel can
+ * never resolve them (hangs to timeout); has to be found via the FormControl wrapper's
+ * visible text instead, then the option picked from the listbox it opens.
+ */
+async function selectMuiOption(page: Page, container: Locator, fieldLabel: string, optionLabel: string): Promise<void> {
+  const field = container.locator('.MuiFormControl-root').filter({ hasText: fieldLabel })
+  await field.getByRole('combobox').click()
+  await page.getByRole('listbox').waitFor({ state: 'visible' })
+  await page.getByRole('option', { name: optionLabel, exact: true }).click()
+}
+
 /** One create-visit-then-record-vitals encounter, reused for each of the new patient's 4 visits. */
 async function addVisitWithVitals(
   page: Page,
@@ -356,12 +370,8 @@ export function buildSteps(): StepDef[] {
         await act('Fill Name', () => dialog.getByLabel('Name').fill('Dr. Haris Mujanović'))
         await act('Fill Email (already taken)', () => dialog.getByLabel('Email').fill(CREDS.doctor.email))
 
-        await act('Open Role dropdown', async () => {
-          await dialog.getByLabel('Role').click()
-          await page.getByRole('listbox').waitFor({ state: 'visible' })
-        })
-        await act('Select Doktor role', () => page.getByRole('option', { name: 'Doktor', exact: true }).click())
-        await act('Fill password', () => dialog.getByLabel('Password', { exact: true }).fill('password'))
+        await act('Select Doktor role', () => selectMuiOption(page, dialog, 'Role', 'Doktor'))
+        await act('Fill password', () => dialog.getByLabel(/^Password/).fill('password'))
         await act('Fill confirm password', () => dialog.getByLabel('Confirm Password').fill('password'))
 
         await act('Submit — expect duplicate-email error', async () => {
@@ -429,17 +439,13 @@ export function buildSteps(): StepDef[] {
 
         await act('Fill Full Name', () => dialog.getByLabel('Full Name').fill(NEW_PATIENT.fullName))
         await act('Fill Email', () => dialog.getByLabel('Email').fill(NEW_PATIENT.email))
-        await act('Fill Password', () => dialog.getByLabel('Password', { exact: true }).fill(NEW_PATIENT.password))
+        await act('Fill Password', () => dialog.getByLabel(/^Password/).fill(NEW_PATIENT.password))
         await act('Fill Confirm Password', () => dialog.getByLabel('Confirm Password').fill(NEW_PATIENT.password))
 
         await act('Fill First Name', () => dialog.getByLabel('First Name').fill(NEW_PATIENT.firstName))
         await act('Fill Last Name', () => dialog.getByLabel('Last Name').fill(NEW_PATIENT.lastName))
         await act('Fill Date of Birth', () => dialog.getByLabel('Date of Birth').fill(NEW_PATIENT.dateOfBirth))
-        await act('Open Gender dropdown', async () => {
-          await dialog.getByLabel('Gender').click()
-          await page.getByRole('listbox').waitFor({ state: 'visible' })
-        })
-        await act('Select Male', () => page.getByRole('option', { name: 'Male', exact: true }).click())
+        await act('Select Male gender', () => selectMuiOption(page, dialog, 'Gender', 'Male'))
         await act('Fill Phone', () => dialog.getByLabel('Phone').fill(NEW_PATIENT.phone))
         await act('Fill Emergency Contact Name', () => dialog.getByLabel('Emergency Contact Name').fill(NEW_PATIENT.emergencyContactName))
         await act('Fill Emergency Contact Phone', () => dialog.getByLabel('Emergency Contact Phone').fill(NEW_PATIENT.emergencyContactPhone))
