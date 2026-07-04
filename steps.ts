@@ -446,7 +446,7 @@ export function buildSteps(): StepDef[] {
         await act('Fill Last Name', () => dialog.getByLabel('Last Name').fill(NEW_PATIENT.lastName))
         await act('Fill Date of Birth', () => dialog.getByLabel('Date of Birth').fill(NEW_PATIENT.dateOfBirth))
         await act('Select Male gender', () => selectMuiOption(page, dialog, 'Gender', 'Male'))
-        await act('Fill Phone', () => dialog.getByLabel('Phone').fill(NEW_PATIENT.phone))
+        await act('Fill Phone', () => dialog.getByLabel(/^Phone/).fill(NEW_PATIENT.phone))
         await act('Fill Emergency Contact Name', () => dialog.getByLabel('Emergency Contact Name').fill(NEW_PATIENT.emergencyContactName))
         await act('Fill Emergency Contact Phone', () => dialog.getByLabel('Emergency Contact Phone').fill(NEW_PATIENT.emergencyContactPhone))
 
