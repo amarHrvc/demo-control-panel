@@ -19,13 +19,15 @@
  */
 
 import express from 'express'
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
+import { chromium, type Browser, type BrowserContext, type Page, type Video } from 'playwright'
 import { fileURLToPath } from 'node:url'
+import { unlink } from 'node:fs/promises'
 import { buildSteps, emptyState, tagInstanceWindow, installVisualCues, setPageCaption, setBaseUrl, BASE_URL, INSTANCE_IDS, type DemoState, type InstanceId } from './steps.ts'
 import {
   isRecordingEnabled,
   setRecordingEnabled,
   getDefaultLabel,
+  setDefaultLabel,
   RECORDINGS_DIR,
   RECORDINGS_ROOT,
   startTake,
@@ -63,6 +65,12 @@ interface Instance {
   resumeResolver: (() => void) | null
   /** Current take's video handle + DB row, only set when RECORDING_ENABLED. */
   recording: OpenTake | null
+  /**
+   * Set after Stop Take: Playwright's recordVideo is a context-level setting, so the
+   * replacement page keeps recording whether we want it to or not — this is that untracked
+   * video, discarded (never shown as a take) once the instance is next torn down.
+   */
+  orphanVideo: Video | null
 }
 
 const instances = new Map<InstanceId, Instance>()
@@ -76,8 +84,17 @@ function beginTake(id: InstanceId, page: Page, takeNumber: number, label: string
 /** Closes the browser first so the video is guaranteed written, then records its final path. */
 async function closeInstance(instance: Instance): Promise<void> {
   const recording = instance.recording
+  const orphan = instance.orphanVideo
   await instance.browser.close().catch(() => {})
   if (recording) await finalizeTake(recording.id, recording.video)
+  if (orphan) {
+    try {
+      const absPath = await orphan.path()
+      await unlink(absPath).catch(() => {})
+    } catch {
+      // never recorded a frame — nothing on disk to clean up
+    }
+  }
 }
 
 async function ensureInstance(id: InstanceId): Promise<Instance> {
@@ -105,7 +122,8 @@ async function ensureInstance(id: InstanceId): Promise<Instance> {
     paused: false,
     waitingLabel: null,
     resumeResolver: null,
-    recording: recordThisInstance ? beginTake(id, page, 1, getDefaultLabel()) : null
+    recording: recordThisInstance ? beginTake(id, page, 1, getDefaultLabel()) : null,
+    orphanVideo: null
   }
   instances.set(id, instance)
   return instance
@@ -237,6 +255,31 @@ app.post('/api/instances/:id/new-take', async (req, res) => {
   res.json({ ok: true, takeNumber: inst.recording.takeNumber })
 })
 
+app.post('/api/instances/:id/stop-take', async (req, res) => {
+  const id = req.params.id as InstanceId
+  const inst = instances.get(id)
+  if (!inst || !inst.recording) {
+    res.status(400).json({ ok: false, error: 'This instance is not currently recording' })
+    return
+  }
+
+  const oldPage = inst.page
+  const oldRecording = inst.recording
+  const newPage = await inst.context.newPage() // same window — nothing to reposition
+  await tagInstanceWindow(newPage, id)
+  await installVisualCues(newPage)
+  await newPage.goto(`${BASE_URL}/dashboard/home`).catch(() => {})
+  await oldPage.close() // finalizes the outgoing take's video
+  await finalizeTake(oldRecording.id, oldRecording.video)
+
+  inst.page = newPage
+  inst.recording = null
+  // The context's recordVideo setting can't be turned off per-page, so this new page keeps
+  // recording whether we want it to or not — untracked, discarded on the next teardown.
+  inst.orphanVideo = newPage.video()
+  res.json({ ok: true })
+})
+
 app.get('/api/recordings', (_req, res) => {
   res.json({ enabled: isRecordingEnabled(), takes: listTakes() })
 })
@@ -266,9 +309,18 @@ app.post('/api/recording', (req, res) => {
     res.status(400).json({ ok: false, error: 'enabled (boolean) is required' })
     return
   }
-  const label = typeof req.body?.label === 'string' ? req.body.label : null
-  setRecordingEnabled(enabled, label)
+  setRecordingEnabled(enabled)
   res.json({ ok: true, enabled: isRecordingEnabled() })
+})
+
+app.get('/api/recording-name', (_req, res) => {
+  res.json({ name: getDefaultLabel() })
+})
+
+app.post('/api/recording-name', (req, res) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name : null
+  setDefaultLabel(name)
+  res.json({ ok: true, name: getDefaultLabel() })
 })
 
 app.get('/api/slowmo', (_req, res) => {

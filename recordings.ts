@@ -63,19 +63,19 @@ export function isRecordingEnabled(): boolean {
 
 /**
  * Flips the toggle. Turning on lazily creates the DB/dir on first use;
- * already-open instances are unaffected. `label`, when turning on, becomes
- * the default take-1 label for every instance opened/reset from here on —
- * so recordings get a meaningful name instead of falling back to "Take 1".
- * Cleared on turning off, so the next recording session starts fresh.
+ * already-open instances are unaffected. Turning off clears the default
+ * label too, so the next recording session starts fresh instead of
+ * silently reusing a stale name.
  */
-export function setRecordingEnabled(enabled: boolean, label?: string | null): void {
+export function setRecordingEnabled(enabled: boolean): void {
   recordingEnabled = enabled
-  if (enabled) {
-    ensureDb()
-    defaultLabel = label?.trim() || null
-  } else {
-    defaultLabel = null
-  }
+  if (enabled) ensureDb()
+  else defaultLabel = null
+}
+
+/** Sets the default take-1 label used for every instance opened/reset while recording is on. */
+export function setDefaultLabel(label: string | null): void {
+  defaultLabel = label?.trim() || null
 }
 
 export function getDefaultLabel(): string | null {

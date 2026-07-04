@@ -7,6 +7,9 @@ const recordingToggleBtn = document.querySelector('[data-action="toggle-recordin
 const recordingStatusEl = document.getElementById('recording-status')
 const slowMoInput = document.getElementById('slowmo-input')
 const slowMoStatus = document.getElementById('slowmo-status')
+const recordingNameBar = document.getElementById('recording-name-bar')
+const recordingNameInput = document.getElementById('recording-name-input')
+const recordingNameStatus = document.getElementById('recording-name-status')
 
 const INSTANCE_COLORS = { admin: '#e53935', doctor: '#1e88e5', patient: '#43a047' }
 
@@ -32,6 +35,7 @@ function renderRecordingToggle() {
   recordingStatusEl.textContent = enabled
     ? 'New/reset instances will record. Already-open windows need Reset to start.'
     : ''
+  recordingNameBar.style.display = enabled ? '' : 'none'
 }
 
 function render() {
@@ -78,7 +82,8 @@ function render() {
           }
           ${
             status.recordingActive
-              ? `<button class="pill-btn record" data-action="new-take" data-instance="${instanceId}">New Take</button>`
+              ? `<button class="pill-btn record" data-action="new-take" data-instance="${instanceId}">New Take</button>
+                 <button class="pill-btn" data-action="stop-take" data-instance="${instanceId}">Stop Take</button>`
               : ''
           }
           <button class="pill-btn danger" data-action="reset" data-instance="${instanceId}">Reset</button>
@@ -132,6 +137,9 @@ function render() {
   })
   appEl.querySelectorAll('[data-action="new-take"]').forEach(btn => {
     btn.addEventListener('click', () => newTake(btn.dataset.instance))
+  })
+  appEl.querySelectorAll('[data-action="stop-take"]').forEach(btn => {
+    btn.addEventListener('click', () => stopTake(btn.dataset.instance))
   })
 }
 
@@ -198,6 +206,14 @@ async function newTake(id) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ label })
   })
+  const json = await res.json()
+  if (!json.ok) alert(json.error)
+  await refreshInstances()
+  await refreshRecordings()
+}
+
+async function stopTake(id) {
+  const res = await fetch(`/api/instances/${id}/stop-take`, { method: 'POST' })
   const json = await res.json()
   if (!json.ok) alert(json.error)
   await refreshInstances()
@@ -344,21 +360,38 @@ baseUrlInput.addEventListener('keydown', e => {
 async function toggleRecording() {
   const anyStatus = Object.values(instanceStatus)[0]
   const nextEnabled = !(anyStatus?.recordingEnabled ?? false)
-
-  let label = null
-  if (nextEnabled) {
-    label = prompt('Name for this recording (used as the default take label instead of "Take 1"):', '')
-    if (label === null) return // cancelled — leave recording off
-  }
-
   await fetch('/api/recording', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: nextEnabled, label })
+    body: JSON.stringify({ enabled: nextEnabled })
   })
   await refreshInstances()
   await refreshRecordings()
+  await loadRecordingName()
 }
+
+async function loadRecordingName() {
+  const res = await fetch('/api/recording-name')
+  const json = await res.json()
+  recordingNameInput.value = json.name ?? ''
+  recordingNameStatus.textContent = ''
+}
+
+async function setRecordingName(name) {
+  const res = await fetch('/api/recording-name', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  })
+  const json = await res.json()
+  recordingNameInput.value = json.name ?? ''
+  recordingNameStatus.textContent = 'applies to take 1 of instances opened/reset from now on'
+}
+
+document.querySelector('[data-action="set-recording-name"]').addEventListener('click', () => setRecordingName(recordingNameInput.value))
+recordingNameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') setRecordingName(recordingNameInput.value)
+})
 
 recordingToggleBtn.addEventListener('click', toggleRecording)
 
@@ -367,6 +400,7 @@ async function init() {
   steps = await res.json()
   await loadBaseUrl()
   await loadSlowMo()
+  await loadRecordingName()
   await refreshInstances()
   await refreshRecordings()
   setInterval(refreshInstances, 1500) // fast enough to catch a waitingLabel promptly during step-through
