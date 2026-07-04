@@ -2,6 +2,9 @@
   "name": "demo-control-panel",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.9.0"
+  },
   "scripts": {
     "demo": "tsx --env-file-if-exists=.env demo.ts",
     "panel": "tsx --env-file-if-exists=.env server.ts",
