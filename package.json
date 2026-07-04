@@ -8,7 +8,8 @@
   "scripts": {
     "demo": "tsx --env-file-if-exists=.env demo.ts",
     "panel": "tsx --env-file-if-exists=.env server.ts",
-    "install-browser": "playwright install chromium"
+    "install-browser": "playwright install chromium",
+    "postinstall": "playwright install chromium"
   },
   "dependencies": {
     "express": "^4.21.0"
