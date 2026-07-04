@@ -27,6 +27,8 @@ import type { Video } from 'playwright'
 import type { InstanceId } from './steps.ts'
 
 let recordingEnabled = process.env.RECORD === '1'
+/** Label applied to the first take (take 1) of every instance opened/reset while recording is on. */
+let defaultLabel: string | null = null
 
 const SESSION_ID = new Date().toISOString().replace(/[:.]/g, '-')
 export const RECORDINGS_ROOT = fileURLToPath(new URL('./recordings', import.meta.url))
@@ -59,10 +61,25 @@ export function isRecordingEnabled(): boolean {
   return recordingEnabled
 }
 
-/** Flips the toggle. Turning on lazily creates the DB/dir on first use; already-open instances are unaffected. */
-export function setRecordingEnabled(enabled: boolean): void {
+/**
+ * Flips the toggle. Turning on lazily creates the DB/dir on first use;
+ * already-open instances are unaffected. `label`, when turning on, becomes
+ * the default take-1 label for every instance opened/reset from here on —
+ * so recordings get a meaningful name instead of falling back to "Take 1".
+ * Cleared on turning off, so the next recording session starts fresh.
+ */
+export function setRecordingEnabled(enabled: boolean, label?: string | null): void {
   recordingEnabled = enabled
-  if (enabled) ensureDb()
+  if (enabled) {
+    ensureDb()
+    defaultLabel = label?.trim() || null
+  } else {
+    defaultLabel = null
+  }
+}
+
+export function getDefaultLabel(): string | null {
+  return defaultLabel
 }
 
 export interface TakeRow {

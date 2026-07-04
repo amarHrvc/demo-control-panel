@@ -25,6 +25,7 @@ import { buildSteps, emptyState, tagInstanceWindow, installVisualCues, setPageCa
 import {
   isRecordingEnabled,
   setRecordingEnabled,
+  getDefaultLabel,
   RECORDINGS_DIR,
   RECORDINGS_ROOT,
   startTake,
@@ -104,7 +105,7 @@ async function ensureInstance(id: InstanceId): Promise<Instance> {
     paused: false,
     waitingLabel: null,
     resumeResolver: null,
-    recording: recordThisInstance ? beginTake(id, page, 1, null) : null
+    recording: recordThisInstance ? beginTake(id, page, 1, getDefaultLabel()) : null
   }
   instances.set(id, instance)
   return instance
@@ -265,7 +266,8 @@ app.post('/api/recording', (req, res) => {
     res.status(400).json({ ok: false, error: 'enabled (boolean) is required' })
     return
   }
-  setRecordingEnabled(enabled)
+  const label = typeof req.body?.label === 'string' ? req.body.label : null
+  setRecordingEnabled(enabled, label)
   res.json({ ok: true, enabled: isRecordingEnabled() })
 })
 

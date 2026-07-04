@@ -344,10 +344,17 @@ baseUrlInput.addEventListener('keydown', e => {
 async function toggleRecording() {
   const anyStatus = Object.values(instanceStatus)[0]
   const nextEnabled = !(anyStatus?.recordingEnabled ?? false)
+
+  let label = null
+  if (nextEnabled) {
+    label = prompt('Name for this recording (used as the default take label instead of "Take 1"):', '')
+    if (label === null) return // cancelled — leave recording off
+  }
+
   await fetch('/api/recording', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: nextEnabled })
+    body: JSON.stringify({ enabled: nextEnabled, label })
   })
   await refreshInstances()
   await refreshRecordings()
