@@ -141,7 +141,14 @@ function render() {
 
 async function runStep(id) {
   const step = steps.find(s => s.id === id)
-  if (step?.say) showTeleprompter(step.say)
+  if (step?.say) {
+    showTeleprompter(step.say)
+    // Mirrors the step's line into that instance's override box, live, so it's sitting
+    // there ready to re-Show (to prolong it past the step's own auto-hide) or hand-edit,
+    // without waiting for a poll tick that could otherwise clobber an in-progress edit.
+    const captionInput = document.querySelector(`#caption-overrides input[data-instance="${step.instance}"]`)
+    if (captionInput) captionInput.value = step.say
+  }
 
   const card = document.getElementById(`card-${id}`)
   const slot = card.querySelector('.result-slot')
@@ -297,12 +304,73 @@ async function toggleDescriptions() {
 
 descriptionsToggleBtn.addEventListener('click', toggleDescriptions)
 
+/**
+ * Built once (not by render(), which reruns every 1.5s poll and would wipe
+ * out an in-progress keystroke) — one row per instance, each overriding that
+ * window's on-page caption directly, independent of the current step or the
+ * Descriptions toggle.
+ */
+function buildCaptionOverrides() {
+  const container = document.getElementById('caption-overrides')
+  container.innerHTML = Object.keys(INSTANCE_COLORS)
+    .map(
+      id => `
+      <div class="caption-row">
+        <span class="caption-label" style="color:${INSTANCE_COLORS[id]}">${id}</span>
+        <input type="text" data-instance="${id}" placeholder="Custom description for this window…" />
+        <button class="pill-btn" data-action="show-caption" data-instance="${id}">Show</button>
+        <button class="pill-btn" data-action="clear-caption" data-instance="${id}">Clear</button>
+        <span class="caption-status" data-instance="${id}"></span>
+      </div>`
+    )
+    .join('')
+
+  container.querySelectorAll('[data-action="show-caption"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.instance
+      const input = container.querySelector(`input[data-instance="${id}"]`)
+      setCaptionOverride(id, input.value)
+    })
+  })
+  container.querySelectorAll('[data-action="clear-caption"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.instance
+      const input = container.querySelector(`input[data-instance="${id}"]`)
+      input.value = ''
+      setCaptionOverride(id, '')
+    })
+  })
+  container.querySelectorAll('input[data-instance]').forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') setCaptionOverride(input.dataset.instance, input.value)
+    })
+  })
+}
+
+async function setCaptionOverride(id, text) {
+  const statusEl = document.querySelector(`.caption-status[data-instance="${id}"]`)
+  try {
+    const res = await fetch(`/api/instances/${id}/caption`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    })
+    const json = await res.json()
+    statusEl.textContent = json.ok ? (text ? 'shown' : 'cleared') : json.error
+    statusEl.classList.toggle('err', !json.ok)
+  } catch (err) {
+    statusEl.textContent = String(err)
+    statusEl.classList.add('err')
+  }
+}
+
 async function init() {
   const res = await fetch('/api/steps')
   steps = await res.json()
   await loadBaseUrl()
   await loadSlowMo()
   await loadDescriptions()
+  buildCaptionOverrides()
   await refreshInstances()
   setInterval(refreshInstances, 1500) // fast enough to catch a waitingLabel promptly during step-through
 }

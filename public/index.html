@@ -116,6 +116,20 @@
     border-radius: 6px; padding: 6px 10px; font-size: 12px; width: 90px; font-family: inherit;
   }
   #slowmo-status { font-size: 11px; color: #8b92a3; }
+
+  #caption-overrides { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .caption-row { display: flex; align-items: center; gap: 8px; }
+  .caption-row .caption-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    width: 54px; flex: none;
+  }
+  .caption-row input {
+    background: #0f1218; border: 1px solid #3c4560; color: #e6e8eb;
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; flex: 1 1 auto;
+    min-width: 0; font-family: inherit;
+  }
+  .caption-row .caption-status { font-size: 11px; color: #8b92a3; flex: none; }
+  .caption-row .caption-status.err { color: #ff9a9a; }
 </style>
 </head>
 <body>
@@ -137,6 +151,7 @@
     <button class="pill-btn" data-action="set-slowmo">Set</button>
     <span id="slowmo-status"></span>
   </div>
+  <div id="caption-overrides"></div>
 </header>
 <div id="teleprompter">
   <div class="label">Say</div>

@@ -184,6 +184,25 @@ app.post('/api/instances/:id/reset', async (req, res) => {
   res.json({ ok: true })
 })
 
+/**
+ * Manually overrides the on-page caption, independent of any step and of the
+ * descriptionsEnabled toggle — this is a deliberate presenter action ("show
+ * this specific text right now"), not the automatic per-step narration, so it
+ * always applies even with descriptions turned off. An empty/missing text
+ * clears it, same as a step with no `say` line does.
+ */
+app.post('/api/instances/:id/caption', async (req, res) => {
+  const id = req.params.id as InstanceId
+  const inst = instances.get(id)
+  if (!inst || inst.page.isClosed()) {
+    res.status(400).json({ ok: false, error: 'Instance not open yet' })
+    return
+  }
+  const text = typeof req.body?.text === 'string' ? req.body.text : null
+  await setPageCaption(inst.page, text)
+  res.json({ ok: true })
+})
+
 app.get('/api/descriptions', (_req, res) => {
   res.json({ enabled: descriptionsEnabled })
 })
