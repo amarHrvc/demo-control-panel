@@ -537,6 +537,20 @@
     <div class="changelog">
       <div class="entry">
         <div class="entry-head">
+          <span class="date">2026-07-05</span>
+          <span class="title">Recording feature disabled; screen descriptions made an independent toggle</span>
+        </div>
+        <dl>
+          <dt>What</dt>
+          <dd><code>server.ts</code> no longer imports or calls anything from <code>recordings.ts</code> — no video capture, no <code>recordings.db</code>, no <code>/api/recording*</code> endpoints, no New Take/Stop Take/Recordings-list UI. <code>recordings.ts</code> itself was left on disk (unused) rather than deleted, in case the feature is wanted back. In its place, a new standalone <code>descriptionsEnabled</code> flag in <code>server.ts</code> (default on) gates the on-page <code>say</code> caption via <code>GET</code>/<code>POST /api/descriptions</code>, with a <strong>Descriptions: ON/OFF</strong> button replacing the old Recording toggle in the panel header.</dd>
+          <dt>Why</dt>
+          <dd>The recording feature (video takes + SQLite metadata) was more machinery than needed going forward, but the on-screen step captions it gated were still wanted independent of any recording — presenters want to toggle those captions on/off regardless of whether a session is ever recorded again.</dd>
+          <dt>How</dt>
+          <dd>The caption used to only fire when <code>instance.recording</code> was truthy (i.e. only while actually capturing video); that check in the <code>/api/steps/:id/run</code> handler was replaced with a plain <code>if (descriptionsEnabled)</code>, so <code>setPageCaption()</code> now fires purely off the new flag. The <code>Instance</code> interface dropped its <code>recording</code>/<code>orphanVideo</code> fields, <code>ensureInstance()</code> no longer conditionally passes <code>recordVideo</code> to <code>browser.newContext()</code>, and <code>closeInstance()</code>/shutdown no longer finalize takes.</dd>
+        </dl>
+      </div>
+      <div class="entry">
+        <div class="entry-head">
           <span class="date">2026-07-03</span>
           <span class="title">Runtime recording toggle, replacing the RECORD=1-only switch</span>
         </div>

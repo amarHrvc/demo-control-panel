@@ -2,14 +2,11 @@
  * Local rehearsal recording — manual "takes" per instance, backed by
  * Playwright's built-in per-page video capture and a SQLite metadata table.
  *
- * Off by default: recording adds overhead and isn't wanted during the real
- * live-Railway run, only while rehearsing locally to build a fallback clip
- * library in case the live environment misbehaves on stage. Can start
- * enabled via RECORD=1, or be toggled at runtime from the panel — but
- * Playwright only accepts recordVideo at browser-context creation, so
- * toggling on mid-session only takes effect for instances opened (or
- * reset) after the toggle; it can't retroactively record an already-open
- * instance.
+ * DISABLED: server.ts no longer imports or calls anything in this file, so
+ * none of this runs regardless of RECORD env var or any toggle — kept
+ * on disk in case the feature is wanted back later. The independent
+ * screen-description toggle (descriptionsEnabled in server.ts) replaced the
+ * one thing this module's recording state used to gate (setPageCaption).
  *
  * Video bytes stay as .webm files on disk under recordings/<session>/ —
  * SQLite only stores metadata (instance, take number, path, timestamps) so

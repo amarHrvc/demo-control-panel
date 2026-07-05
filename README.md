@@ -5,8 +5,8 @@ presentation). Extracted from `nutri-ledger/_docs_uni/presentation/demo-runner`
 into its own repo so it can evolve independently of the app monorepo.
 
 Drives real, headed Chromium instances through a scripted clinical demo
-(admin → doctor → patient roles) so the presenter can click through it live,
-or record it. Two front ends share the same step definitions:
+(admin → doctor → patient roles) so the presenter can click through it live.
+Two front ends share the same step definitions:
 
 - **`npm run panel`** — a local web control panel (`http://localhost:4949`)
   with one button per step, clickable independently and out of order.
@@ -55,39 +55,14 @@ $env:DRY_RUN='1'; npm run panel # PowerShell
 Run without `DRY_RUN` only when you actually want those effects (the real
 defense, or a deliberate re-seed-and-redo).
 
-## Recording a local fallback
+## Screen descriptions
 
-If you want a backup clip library in case the live environment (e.g. the
-Railway deploy) misbehaves mid-presentation, rehearse locally with
-recording on. Either start the panel with it already on:
-
-```bash
-RECORD=1 npm run panel        # bash / zsh
-```
-```powershell
-$env:RECORD='1'; npm run panel # PowerShell
-```
-
-...or flip the **Recording: OFF/ON** toggle in the panel header at any
-time. The toggle only affects instances **opened or reset after** you flip
-it — Playwright only accepts its recording config when a browser context is
-created, so it can't retroactively start recording a window that's already
-open. If you toggle it on mid-session, any already-open instance shows a
-"not recording — Reset to apply" hint; hit that instance's Reset to pick it
-up (this closes and relaunches just that one browser).
-
-Each recording instance captures continuously from the moment it opens.
-Click **New Take** in an instance's header to close out the current clip
-and start a fresh one in the same login session (cookies carry over — no
-re-login needed) — do this at natural breakpoints, e.g. per segment, so you
-end up with short clips you can swap in for just the part that failed live
-rather than one long recording. You'll be prompted for an optional label.
-
-Finished takes show up in the **Recordings** section at the bottom of the
-panel with a link to the `.webm`. Files land under `recordings/<session
-timestamp>/` and metadata (instance, take number, label, timestamps) is
-tracked in `recordings.db` (SQLite) — both are gitignored. Recording is off
-by default; leaving it off behaves exactly as before.
+Each step can burn its talking point (the `say` line) onto the screen
+itself, beside the role badge, while it runs — handy for following along on
+a recording or screenshot without needing the panel visible. Flip the
+**Descriptions: ON/OFF** toggle in the panel header to turn this on or off;
+it takes effect on the very next step you run, no restart or reset needed.
+Descriptions are on by default.
 
 ## Architecture
 

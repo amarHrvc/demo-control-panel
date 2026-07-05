@@ -80,6 +80,11 @@ export const INSTANCE_COLORS: Record<InstanceId, string> = {
  * The caption is driven from Node via `window.__setDemoCaption(text)`,
  * called through page.evaluate (see setPageCaption below) whenever a step
  * with a `say` line starts — it's just an empty, hidden bubble until then.
+ * Also mirrored into sessionStorage: a step that does a hard navigation
+ * (page.goto, or the server redirect after login) tears down the document
+ * this script runs in, and the freshly reinstalled caption element would
+ * otherwise come back empty/hidden — sessionStorage is what survives that,
+ * so the caption gets restored instead of flashing once and vanishing.
  */
 export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<void> {
   // Passed as a raw script STRING, not a function — page.addInitScript would otherwise
@@ -120,11 +125,21 @@ export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<voi
         if (text) {
           el.textContent = text;
           el.style.display = 'block';
+          try { sessionStorage.setItem('__demo_caption_text__', text); } catch (e) {}
         } else {
           el.textContent = '';
           el.style.display = 'none';
+          try { sessionStorage.removeItem('__demo_caption_text__'); } catch (e) {}
         }
       };
+
+      // A hard navigation (page.goto, or the server redirect after login) tears down this
+      // whole document and reruns this init script fresh in the new one — sessionStorage
+      // is the only thing that survives that, so restore whatever caption was showing
+      // instead of it silently flashing then vanishing on every navigating step.
+      var persisted = null;
+      try { persisted = sessionStorage.getItem('__demo_caption_text__'); } catch (e) {}
+      if (persisted) window.__setDemoCaption(persisted);
     }
     function start() {
       install();
