@@ -430,18 +430,21 @@ export function buildSteps(): StepDef[] {
       instance: 'doctor',
       segment: 'SEGMENT 2 · Doctor',
       title: 'Step 8 — Add New Patient',
-      say: "Doctors can onboard patients directly, not just admins. Creating a patient here also creates their login account — this is the account we'll log into later as the Patient role.",
+      say: "Doctors can onboard patients directly, not just admins — registering here creates the patient's login account too, scoped so it can only ever mint a patient-role account, never a doctor or admin one. This is the account we'll log into later as the Patient role.",
       requires: 'On the Patients list (Step 7).',
       run: async ({ page, act }) => {
         await act('Clear search', () => page.getByPlaceholder('Search by name, phone or other').fill(''))
         await act('Open Add New Patient dialog', () => page.getByRole('button', { name: 'Add New Patient' }).click())
         const dialog = page.getByRole('dialog')
 
+        // Step 1 of 3: Account
         await act('Fill Full Name', () => dialog.getByLabel('Full Name').fill(NEW_PATIENT.fullName))
         await act('Fill Email', () => dialog.getByLabel('Email').fill(NEW_PATIENT.email))
         await act('Fill Password', () => dialog.getByLabel(/^Password/).fill(NEW_PATIENT.password))
         await act('Fill Confirm Password', () => dialog.getByLabel('Confirm Password').fill(NEW_PATIENT.password))
+        await act('Next: Patient details', () => dialog.getByRole('button', { name: 'Next' }).click())
 
+        // Step 2 of 3: Patient details
         await act('Fill First Name', () => dialog.getByLabel('First Name').fill(NEW_PATIENT.firstName))
         await act('Fill Last Name', () => dialog.getByLabel('Last Name').fill(NEW_PATIENT.lastName))
         await act('Fill Date of Birth', () => dialog.getByLabel('Date of Birth').fill(NEW_PATIENT.dateOfBirth))
@@ -449,7 +452,9 @@ export function buildSteps(): StepDef[] {
         await act('Fill Phone', () => dialog.getByLabel(/^Phone/).fill(NEW_PATIENT.phone))
         await act('Fill Emergency Contact Name', () => dialog.getByLabel('Emergency Contact Name').fill(NEW_PATIENT.emergencyContactName))
         await act('Fill Emergency Contact Phone', () => dialog.getByLabel('Emergency Contact Phone').fill(NEW_PATIENT.emergencyContactPhone))
+        await act('Next: Socioeconomic', () => dialog.getByRole('button', { name: 'Next' }).click())
 
+        // Step 3 of 3: Socioeconomic (optional) — skip straight to submit
         await act('Create patient', () => dialog.getByRole('button', { name: 'Create Patient' }).click())
 
         const testPatientUrl = await act('Open new patient’s profile', async () => {
