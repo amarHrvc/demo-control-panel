@@ -243,20 +243,25 @@ app.post('/api/steps/:id/run', async (req, res) => {
     res.status(404).json({ ok: false, error: 'Unknown step id' })
     return
   }
+  let instance: Instance | null = null
   try {
-    const instance = await ensureInstance(step.instance)
+    instance = await ensureInstance(step.instance)
     // Burns the presenter's talking point onto the screen beside the role badge, toggleable
     // independently of anything else so the presenter can turn it off for a clean live view.
     if (descriptionsEnabled) await setPageCaption(instance.page, step.say)
     const patch = await step.run({
       page: instance.page,
       state: instance.state,
-      act: (label, fn) => act(instance, label, fn)
+      act: (label, fn) => act(instance!, label, fn)
     })
     if (patch) Object.assign(instance.state, patch) // atomic: only merged after run() resolves
     res.json({ ok: true, url: instance.page.url() })
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message })
+  } finally {
+    // Hide it once the step is done (pass or fail) rather than leaving it up until the next
+    // step overwrites it — the presenter can also dismiss it early via the × on the caption itself.
+    if (instance && descriptionsEnabled) await setPageCaption(instance.page, null)
   }
 })
 

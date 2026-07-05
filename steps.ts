@@ -110,8 +110,22 @@ export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<voi
 
       var caption = document.createElement('div');
       caption.id = '__demo_caption__';
-      caption.style.cssText = 'display:none;flex:1 1 auto;min-width:0;background:rgba(15,18,24,.92);color:#f2f4f8;font:600 19px/1.45 system-ui,sans-serif;padding:12px 20px;border-radius:8px;border-left:5px solid ' + COLOR + ';box-shadow:0 2px 10px rgba(0,0,0,.45);';
+      caption.style.cssText = 'display:none;position:relative;flex:1 1 auto;min-width:0;background:rgba(15,18,24,.92);color:#f2f4f8;font:600 19px/1.45 system-ui,sans-serif;padding:12px 44px 12px 20px;border-radius:8px;border-left:5px solid ' + COLOR + ';box-shadow:0 2px 10px rgba(0,0,0,.45);pointer-events:auto;';
       dock.appendChild(caption);
+
+      var captionText = document.createElement('span');
+      caption.appendChild(captionText);
+
+      // Lets the presenter dismiss the caption early without touching the Descriptions
+      // toggle in the panel — the next step still shows its own caption normally, since
+      // the toggle (not this) is what setPageCaption checks before ever calling this.
+      var captionClose = document.createElement('button');
+      captionClose.id = '__demo_caption_close__';
+      captionClose.textContent = String.fromCharCode(215);
+      captionClose.setAttribute('aria-label', 'Dismiss description');
+      captionClose.style.cssText = 'position:absolute;top:4px;right:6px;background:transparent;border:none;color:#aab0bd;font-size:20px;line-height:1;cursor:pointer;padding:4px 8px;';
+      captionClose.addEventListener('click', function () { window.__setDemoCaption(null); });
+      caption.appendChild(captionClose);
 
       var badge = document.createElement('div');
       badge.id = '__demo_role_badge__';
@@ -120,15 +134,13 @@ export async function tagInstanceWindow(page: Page, id: InstanceId): Promise<voi
       dock.appendChild(badge);
 
       window.__setDemoCaption = function (text) {
-        var el = document.getElementById('__demo_caption__');
-        if (!el) return;
         if (text) {
-          el.textContent = text;
-          el.style.display = 'block';
+          captionText.textContent = text;
+          caption.style.display = 'block';
           try { sessionStorage.setItem('__demo_caption_text__', text); } catch (e) {}
         } else {
-          el.textContent = '';
-          el.style.display = 'none';
+          captionText.textContent = '';
+          caption.style.display = 'none';
           try { sessionStorage.removeItem('__demo_caption_text__'); } catch (e) {}
         }
       };
