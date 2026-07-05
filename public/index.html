@@ -95,9 +95,15 @@
   .run-btn:hover { background: #333d54; }
   .run-btn:active { transform: translateY(1px); }
   .requires { font-size: 12px; color: #8b92a3; margin-top: 6px; }
-  .result { font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; }
+  .result { font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; display: flex; align-items: flex-start; gap: 10px; }
   .result.ok { background: #16261c; color: #7fd99a; }
   .result.err { background: #2a1616; color: #ff9a9a; }
+  .result-text { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; }
+  .copy-btn {
+    flex: none; background: #3c4560; color: #dfe4f5; border: 1px solid #4a5570;
+    border-radius: 5px; padding: 3px 10px; font-size: 11px; cursor: pointer;
+  }
+  .copy-btn:hover { background: #4a5570; }
 
   .pill-btn.record { background: #3a2126; border-color: #5a2a2f; color: #ff8a8a; }
   .take-badge {

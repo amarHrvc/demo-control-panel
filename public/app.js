@@ -17,6 +17,25 @@ let steps = []
 let instanceStatus = {} // id -> { open, url, paused, state }
 let stepResults = {} // id -> { status: 'ok'|'err', text: string }
 
+function renderResult(status, text) {
+  const copyBtn = status === 'err' ? `<button class="copy-btn" data-action="copy-error" title="Copy error">Copy</button>` : ''
+  return `<div class="result ${status}"><div class="result-text">${escapeHtml(text)}</div>${copyBtn}</div>`
+}
+
+appEl.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-action="copy-error"]')
+  if (!btn) return
+  const text = btn.previousElementSibling?.textContent ?? ''
+  try {
+    await navigator.clipboard.writeText(text)
+    const original = btn.textContent
+    btn.textContent = 'Copied!'
+    setTimeout(() => { btn.textContent = original }, 1500)
+  } catch {
+    alert('Could not copy to clipboard')
+  }
+})
+
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
@@ -112,7 +131,7 @@ function render() {
           <button class="run-btn" data-id="${step.id}">Run</button>
         </div>
         ${step.requires ? `<div class="requires">Requires: ${escapeHtml(step.requires)}</div>` : ''}
-        <div class="result-slot">${lastResult ? `<div class="result ${lastResult.status}">${escapeHtml(lastResult.text)}</div>` : ''}</div>
+        <div class="result-slot">${lastResult ? renderResult(lastResult.status, lastResult.text) : ''}</div>
       `
       block.appendChild(card)
     }
@@ -164,12 +183,12 @@ async function runStep(id) {
       card.classList.add('err')
       stepResults[id] = { status: 'err', text: json.error }
     }
-    slot.innerHTML = `<div class="result ${stepResults[id].status}">${escapeHtml(stepResults[id].text)}</div>`
+    slot.innerHTML = renderResult(stepResults[id].status, stepResults[id].text)
   } catch (err) {
     card.classList.remove('running')
     card.classList.add('err')
     stepResults[id] = { status: 'err', text: String(err) }
-    slot.innerHTML = `<div class="result err">${escapeHtml(stepResults[id].text)}</div>`
+    slot.innerHTML = renderResult('err', stepResults[id].text)
   }
   refreshInstances()
 }
