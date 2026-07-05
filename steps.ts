@@ -285,6 +285,25 @@ async function selectMuiOption(page: Page, container: Locator, fieldLabel: strin
   await page.getByRole('option', { name: optionLabel, exact: true }).click()
 }
 
+/**
+ * Clicks a wizard's "Next" button and confirms the next step actually rendered before
+ * moving on — a plain .click() can report success while the click silently fails to
+ * register in the page (layout-shift/focus race right after a fill, observed live:
+ * the Confirm Password field stays focused and nothing advances, though a manual
+ * click works fine). Retries the click a few times rather than trusting the first one.
+ */
+async function advanceWizardStep(dialog: Locator, verify: Locator): Promise<void> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await dialog.getByRole('button', { name: 'Next' }).click()
+    try {
+      await verify.waitFor({ state: 'visible', timeout: 5_000 })
+      return
+    } catch {
+      if (attempt === 3) throw new Error('Next did not advance the wizard after 3 attempts')
+    }
+  }
+}
+
 /** One create-visit-then-record-vitals encounter, reused for each of the new patient's 4 visits. */
 async function addVisitWithVitals(
   page: Page,
@@ -442,7 +461,7 @@ export function buildSteps(): StepDef[] {
         await act('Fill Email', () => dialog.getByLabel('Email').fill(NEW_PATIENT.email))
         await act('Fill Password', () => dialog.getByLabel(/^Password/).fill(NEW_PATIENT.password))
         await act('Fill Confirm Password', () => dialog.getByLabel('Confirm Password').fill(NEW_PATIENT.password))
-        await act('Next: Patient details', () => dialog.getByRole('button', { name: 'Next' }).click())
+        await act('Next: Patient details', () => advanceWizardStep(dialog, dialog.getByLabel('First Name')))
 
         // Step 2 of 3: Patient details
         await act('Fill First Name', () => dialog.getByLabel('First Name').fill(NEW_PATIENT.firstName))
@@ -452,7 +471,7 @@ export function buildSteps(): StepDef[] {
         await act('Fill Phone', () => dialog.getByLabel(/^Phone/).fill(NEW_PATIENT.phone))
         await act('Fill Emergency Contact Name', () => dialog.getByLabel('Emergency Contact Name').fill(NEW_PATIENT.emergencyContactName))
         await act('Fill Emergency Contact Phone', () => dialog.getByLabel('Emergency Contact Phone').fill(NEW_PATIENT.emergencyContactPhone))
-        await act('Next: Socioeconomic', () => dialog.getByRole('button', { name: 'Next' }).click())
+        await act('Next: Socioeconomic', () => advanceWizardStep(dialog, dialog.getByRole('button', { name: 'Create Patient' })))
 
         // Step 3 of 3: Socioeconomic (optional) — skip straight to submit
         await act('Create patient', () => dialog.getByRole('button', { name: 'Create Patient' }).click())
